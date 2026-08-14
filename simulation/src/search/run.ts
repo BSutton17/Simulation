@@ -17,6 +17,7 @@ import {
   readCheckpoint,
   writeCheckpoint,
   type CheckpointIdentity,
+  type CheckpointStage,
 } from "./checkpoint.js";
 import { captureProvenance } from "../evaluation/provenance.js";
 import { hashSeed } from "../rng.js";
@@ -377,6 +378,7 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
     generations,
     populationSize,
     sigma,
+    promote,
     tiersHash: hashSeed(JSON.stringify([SCREEN_TIER, FULL_TIER, VALIDATION_TIER]))
       .toString(16)
       .padStart(8, "0"),
@@ -437,13 +439,27 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
     });
   }
 
+  /**
+   * Records an evaluation for the report, at most once.
+   *
+   * A resumed run replays the previous session's evaluations and then re-runs
+   * the stages that were outstanding. Those re-runs are cache hits, so without
+   * this the same validation reading would be appended again on every resume,
+   * and the list would grow with each interruption while describing the same
+   * work.
+   */
+  const remember = (e: CandidateEvaluation): void => {
+    if (evaluations.some((x) => x.candidate.hash === e.candidate.hash && x.tier === e.tier)) return;
+    evaluations.push(e);
+  };
+
   config.onProgress?.({ kind: "generation", generation: -1, message: "evaluating baseline" });
   const baselineScreen = await evaluateCandidate(baselineCandidate, "screen", cache, config, fitnessConfig);
   record(baselineScreen);
-  evaluations.push(baselineScreen);
+  remember(baselineScreen);
   const baselineFull = await evaluateCandidate(baselineCandidate, "full", cache, config, fitnessConfig);
   record(baselineFull);
-  evaluations.push(baselineFull);
+  remember(baselineFull);
 
   const cma = resumed
     ? Cmaes.restore(resumed.cma)
@@ -464,11 +480,7 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
   if (resumed) {
     // Replay the previous run's bookkeeping so the final report describes the
     // whole search, not just the segment after the interruption.
-    for (const e of resumed.evaluations) {
-      if (!evaluations.some((x) => x.candidate.hash === e.candidate.hash && x.tier === e.tier)) {
-        evaluations.push(e);
-      }
-    }
+    for (const e of resumed.evaluations) remember(e);
     matches += resumed.counters.matches;
     screens += resumed.counters.screens;
     fulls += resumed.counters.fulls;
@@ -481,6 +493,43 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
         )?.evaluation ?? null;
     }
   }
+
+  /**
+   * Persists the run's state.
+   *
+   * Called after every generation AND at each step of validation. A failure to
+   * write must not destroy a run that is otherwise fine: a lost checkpoint
+   * costs time, an aborted search costs everything.
+   */
+  const saveCheckpoint = (completed: number, stage: CheckpointStage, generation: number): void => {
+    if (!config.checkpointPath) return;
+    try {
+      writeCheckpoint(config.checkpointPath, {
+        version: CHECKPOINT_VERSION,
+        identity,
+        writtenAt: (config.now ?? (() => new Date().toISOString()))(),
+        completedGenerations: completed,
+        stage,
+        cma: cma.snapshot(),
+        schema,
+        generationRecords,
+        evaluations,
+        cacheEntries: cache.dump(),
+        bestFullKey: bestFull ? cacheKeyOf(bestFull.candidate.hash, bestFull.tier) : null,
+        counters: {
+          candidateCount,
+          matches, screens, fulls, validations, failures,
+          elapsedMs: performance.now() - started,
+        },
+      });
+    } catch (error) {
+      config.onProgress?.({
+        kind: "generation",
+        generation,
+        message: `checkpoint write failed (continuing): ${(error as Error).message}`,
+      });
+    }
+  };
 
   for (let g = firstGeneration; g < generations; g++) {
     const genStarted = performance.now();
@@ -519,7 +568,7 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
       if (p.failure) continue;
       const full = await evaluateCandidate(p.candidate, "full", cache, config, fitnessConfig);
       record(full);
-      evaluations.push(full);
+      remember(full);
       const score = rankOf(full);
       if (bestFullThisGen === null || score > bestFullThisGen) bestFullThisGen = score;
       if (!bestFull || score > rankOf(bestFull)) bestFull = full;
@@ -549,36 +598,8 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
     });
 
     // Written AFTER the generation is fully accounted for, so a checkpoint
-    // never describes a half-finished generation. A failure to write must not
-    // destroy a run that is otherwise fine — a lost checkpoint costs time, an
-    // aborted search costs everything.
-    if (config.checkpointPath) {
-      try {
-        writeCheckpoint(config.checkpointPath, {
-          version: CHECKPOINT_VERSION,
-          identity,
-          writtenAt: (config.now ?? (() => new Date().toISOString()))(),
-          completedGenerations: g + 1,
-          cma: cma.snapshot(),
-          schema,
-          generationRecords,
-          evaluations,
-          cacheEntries: cache.dump(),
-          bestFullKey: bestFull ? cacheKeyOf(bestFull.candidate.hash, bestFull.tier) : null,
-          counters: {
-            candidateCount,
-            matches, screens, fulls, validations, failures,
-            elapsedMs: performance.now() - started,
-          },
-        });
-      } catch (error) {
-        config.onProgress?.({
-          kind: "generation",
-          generation: g,
-          message: `checkpoint write failed (continuing): ${(error as Error).message}`,
-        });
-      }
-    }
+    // never describes a half-finished generation.
+    saveCheckpoint(g + 1, g + 1 >= generations ? "validation" : "search", g);
 
     // Checked AFTER the checkpoint, so the work just finished is never the work
     // that gets lost.
@@ -605,13 +626,27 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
   // validate is provisional anyway. The resumed session validates the real one.
   if (bestFull && validateCount > 0 && !stoppedEarly) {
     config.onProgress?.({ kind: "generation", generation: generations, message: "validating elite on disjoint seeds" });
+
+    // Checkpointed after EACH of the two evaluations, not just at the end.
+    // Each one costs 21,816 matches; losing the first because the second was
+    // interrupted would mean re-running an hour of work that is already done
+    // and already correct. On resume both come back from the cache.
     baselineValidation = await evaluateCandidate(baselineCandidate, "validation", cache, config, fitnessConfig);
     record(baselineValidation);
-    evaluations.push(baselineValidation);
+    remember(baselineValidation);
+    saveCheckpoint(generations, "validation", generations);
+
     bestValidation = await evaluateCandidate(bestFull.candidate, "validation", cache, config, fitnessConfig);
     record(bestValidation);
-    evaluations.push(bestValidation);
+    remember(bestValidation);
+    saveCheckpoint(generations, "validation", generations);
   }
+
+  // The run is finished only once everything it owed has been produced. A
+  // checkpoint marked "complete" is the one thing readCheckpoint refuses to
+  // resume, so it is written last and only when nothing is outstanding.
+  const finished = !stoppedEarly && (validateCount === 0 || !bestFull || bestValidation !== null);
+  if (finished) saveCheckpoint(generations, "complete", generations);
 
   return {
     optimizer: "cmaes",

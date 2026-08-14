@@ -40,6 +40,7 @@ const IDENTITY: CheckpointIdentity = {
   generations: 10,
   populationSize: 8,
   sigma: 0.2,
+  promote: 3,
   tiersHash: "cafe0000",
 };
 
@@ -58,6 +59,7 @@ function sampleCheckpoint(overrides: Partial<SearchCheckpoint> = {}): SearchChec
     identity: IDENTITY,
     writtenAt: "2026-08-13T00:00:00.000Z",
     completedGenerations: 3,
+    stage: "search",
     cma: cma.snapshot(),
     schema,
     generationRecords: [],
@@ -127,6 +129,7 @@ test("resume is refused across every identity field that could change a score", 
     ["seed", 43],
     ["populationSize", 12],
     ["sigma", 0.3],
+    ["promote", 1],
     ["tiersHash", "99998888"],
   ];
   withTempDir((dir) => {
@@ -155,10 +158,101 @@ test("a longer run may resume a shorter checkpoint", () => {
 test("a finished checkpoint does not resume into a no-op run", () => {
   withTempDir((dir) => {
     const path = join(dir, "run.json");
-    writeCheckpoint(path, sampleCheckpoint({ completedGenerations: 10 }));
+    writeCheckpoint(path, sampleCheckpoint({ completedGenerations: 10, stage: "complete" }));
     const { checkpoint, rejected } = readCheckpoint(path, IDENTITY);
     assert.equal(checkpoint, null);
     assert.match(rejected ?? "", /already complete/);
+  });
+});
+
+/**
+ * `promote` in the identity.
+ *
+ * It provably does not steer the search — `cma.tell` runs on the whole
+ * population's screening scores before anything is promoted, proven in
+ * test/promoteTrajectory.test.ts. It is fingerprinted for a different reason:
+ * it decides how many candidates are ever measured at full depth. Changing it
+ * mid-run leaves some generations with three fully-evaluated candidates and
+ * others with one, the elite is drawn from uneven coverage, and nothing in the
+ * run's own record would show it happened.
+ */
+test("a checkpoint will not resume under a different promote", () => {
+  withTempDir((dir) => {
+    const path = join(dir, "run.json");
+    writeCheckpoint(path, sampleCheckpoint()); // promote 3
+
+    for (const promote of [1, 2, 5]) {
+      const { checkpoint, rejected } = readCheckpoint(path, { ...IDENTITY, promote });
+      assert.equal(checkpoint, null, `resumed a promote-3 checkpoint under promote ${promote}`);
+      assert.match(rejected ?? "", /promote/, "the rejection should name promote");
+    }
+
+    // The same value still resumes.
+    assert.ok(readCheckpoint(path, IDENTITY).checkpoint, "an unchanged promote must still resume");
+  });
+});
+
+/**
+ * Finishing the last generation is not finishing the run.
+ *
+ * Validation costs 43,632 matches — one to two hours. Before this, a session
+ * killed inside that stage left a checkpoint refused as "already complete" on
+ * the next attempt: the generations were intact on disk and unreachable, and
+ * the only way forward was to run the whole search again.
+ */
+test("search complete with validation pending is resumable", () => {
+  withTempDir((dir) => {
+    const path = join(dir, "run.json");
+    // Every generation done, validation not finished.
+    writeCheckpoint(path, sampleCheckpoint({ completedGenerations: 10, stage: "validation" }));
+
+    const { checkpoint, rejected } = readCheckpoint(path, IDENTITY);
+    assert.equal(rejected, null, "an unvalidated run must not be refused");
+    assert.ok(checkpoint, "the checkpoint should load so validation can be retried");
+    assert.equal(checkpoint.completedGenerations, 10);
+    assert.equal(checkpoint.stage, "validation");
+  });
+});
+
+test("a run is complete only once validation has produced its results", () => {
+  withTempDir((dir) => {
+    const path = join(dir, "run.json");
+
+    // Same generation count, but validation finished: nothing left to do.
+    writeCheckpoint(path, sampleCheckpoint({ completedGenerations: 10, stage: "complete" }));
+    const done = readCheckpoint(path, IDENTITY);
+    assert.equal(done.checkpoint, null);
+    assert.match(done.rejected ?? "", /already complete \(search and validation\)/);
+
+    // The distinction is the stage alone — identical generation counts.
+    writeCheckpoint(path, sampleCheckpoint({ completedGenerations: 10, stage: "validation" }));
+    assert.ok(readCheckpoint(path, IDENTITY).checkpoint, "stage is what separates done from pending");
+  });
+});
+
+test("a completed run still resumes when more generations are asked for", () => {
+  withTempDir((dir) => {
+    const path = join(dir, "run.json");
+    writeCheckpoint(path, sampleCheckpoint({ completedGenerations: 10, stage: "complete" }));
+
+    // Extending a finished search is legitimate — the work behind it is valid,
+    // and refusing would force a rerun of everything to add one generation.
+    const { checkpoint, rejected } = readCheckpoint(path, { ...IDENTITY, generations: 15 });
+    assert.equal(rejected, null);
+    assert.ok(checkpoint);
+    assert.equal(checkpoint.completedGenerations, 10);
+  });
+});
+
+test("the three stages are distinguishable and only one ends the run", () => {
+  withTempDir((dir) => {
+    const path = join(dir, "run.json");
+    const resumable: Record<string, boolean> = {};
+    for (const stage of ["search", "validation", "complete"] as const) {
+      writeCheckpoint(path, sampleCheckpoint({ completedGenerations: 10, stage }));
+      resumable[stage] = readCheckpoint(path, IDENTITY).checkpoint !== null;
+    }
+    assert.deepEqual(resumable, { search: true, validation: true, complete: false });
   });
 });
 

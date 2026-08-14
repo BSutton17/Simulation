@@ -87,9 +87,10 @@ test("promoted results flow only to reporting, best-full and validation", () => 
   const from = loop.search(/\/\/ Promote the best few/);
   const promotionBlock = loop.slice(from);
 
-  // Everything the block assigns to. If a new sink appears here, this test
-  // should fail until someone confirms it is not a feedback path.
-  const sinks = ["bestFullThisGen", "bestFull", "evaluations", "record"];
+  // Everything the block feeds. If a new sink appears here, this test should
+  // fail until someone confirms it is not a feedback path. `remember` is the
+  // de-duplicating recorder for the final report; `record` counts totals.
+  const sinks = ["bestFullThisGen", "bestFull", "remember", "record"];
   for (const sink of sinks) assert.match(promotionBlock, new RegExp(`\\b${sink}\\b`));
 
   // bestFull is consumed by validation and the checkpoint, never by the search.

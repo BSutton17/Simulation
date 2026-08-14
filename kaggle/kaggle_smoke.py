@@ -199,6 +199,18 @@ def main():
             bool(ck.get("identity", {}).get("engineSha")),
             ck.get("identity", {}).get("engineSha", "")[:10],
         ))
+        results.append(check(
+            "checkpoint pins promote",
+            ck.get("identity", {}).get("promote") == PROMOTE,
+            f"promote={ck.get('identity', {}).get('promote')}",
+        ))
+        # With VALIDATE = 0 there is no validation stage to wait for, so a run
+        # that finished its generations really is finished.
+        results.append(check(
+            "checkpoint records a stage",
+            ck.get("stage") in ("search", "validation", "complete"),
+            f"stage={ck.get('stage')}",
+        ))
 
     if result_file.exists():
         data = json.loads(result_file.read_text())

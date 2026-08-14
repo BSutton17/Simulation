@@ -24,7 +24,8 @@ import type { BalanceSchema } from "./schema.js";
  * together and present the result as one, which is worse than starting over.
  */
 
-export const CHECKPOINT_VERSION = "v1";
+/** v2 added `stage` and put `promote` in the identity. */
+export const CHECKPOINT_VERSION = "v2";
 
 /** The identity a checkpoint must match to be resumable. */
 export interface CheckpointIdentity {
@@ -39,9 +40,38 @@ export interface CheckpointIdentity {
   generations: number;
   populationSize: number | null;
   sigma: number;
+  /**
+   * Candidates promoted to a full evaluation each generation.
+   *
+   * This does NOT affect where the search goes — `cma.tell` runs on the whole
+   * population's screening scores before anything is promoted, verified in
+   * test/promoteTrajectory.test.ts. It is in the identity for a different
+   * reason: it decides how many candidates are ever measured at full depth, so
+   * changing it mid-run leaves some generations with three fully-evaluated
+   * candidates and others with one. The elite is then drawn from uneven
+   * coverage, and the run's own record gives no hint that happened.
+   */
+  promote: number;
   /** Fingerprint of the three tier configurations. */
   tiersHash: string;
 }
+
+/**
+ * How far a run has actually got.
+ *
+ * Finishing the last generation is not finishing the run. Validation is a
+ * separate stage costing 43,632 matches — one to two hours — and a session
+ * killed inside it used to leave a checkpoint that was refused as "already
+ * complete" on the next attempt, because completed generations were the only
+ * thing being counted. The work was intact on disk and unreachable.
+ */
+export type CheckpointStage =
+  /** Generations still to run. */
+  | "search"
+  /** Every generation done; validation not yet finished. Resumable. */
+  | "validation"
+  /** Validation finished and its results are in the checkpoint. Done. */
+  | "complete";
 
 export interface SearchCheckpoint {
   version: string;
@@ -49,6 +79,8 @@ export interface SearchCheckpoint {
   writtenAt: string;
   /** Generations FULLY completed. The loop resumes at this index. */
   completedGenerations: number;
+  /** Which stage the run reached. Only "complete" means there is nothing left. */
+  stage: CheckpointStage;
   cma: CmaSnapshot;
   schema: BalanceSchema;
   generationRecords: GenerationRecord[];
@@ -124,8 +156,13 @@ export function readCheckpoint(path: string, identity: CheckpointIdentity): Chec
   if (mismatches.length > 0) {
     return { checkpoint: null, rejected: `checkpoint is from a different run: ${mismatches.join(", ")}` };
   }
-  if (parsed.completedGenerations >= identity.generations) {
-    return { checkpoint: null, rejected: "checkpoint is already complete" };
+  // Refused only when there is genuinely nothing left to do: validation
+  // finished AND no further generations have been asked for. A run whose
+  // generations are done but whose validation is not is precisely the case
+  // that must resume — otherwise an interrupted validation stage throws away
+  // every generation behind it.
+  if (parsed.stage === "complete" && parsed.completedGenerations >= identity.generations) {
+    return { checkpoint: null, rejected: "run is already complete (search and validation)" };
   }
   return { checkpoint: parsed, rejected: null };
 }

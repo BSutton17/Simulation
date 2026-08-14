@@ -60,6 +60,7 @@ export {
   cacheKeyOf,
   CHECKPOINT_VERSION,
   type SearchCheckpoint,
+  type CheckpointStage,
   type CheckpointIdentity,
   type CheckpointLoad,
 } from "./checkpoint.js";

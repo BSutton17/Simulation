@@ -1,0 +1,93 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+/**
+ * The two Kaggle launchers, held to their stated purpose.
+ *
+ * `kaggle_notebook.py` starts an eight-hour training run; `kaggle_smoke.py`
+ * proves the pipeline executes and nothing more. Keeping them as separate files
+ * rather than one file with a mode flag means neither can be started by
+ * accident — but it also means the production configuration can be edited while
+ * every other check stays green, and a wrong number there costs eight hours and
+ * a result nobody can compare to anything.
+ *
+ * These are cheap string assertions over the two scripts. They are not a
+ * substitute for reading them; they are a tripwire for the specific values that
+ * must not drift.
+ */
+
+const production = readFileSync("kaggle/kaggle_notebook.py", "utf8");
+const smoke = readFileSync("kaggle/kaggle_smoke.py", "utf8");
+
+/** Reads a `NAME = value` assignment from a Python source file. */
+function setting(source: string, name: string): string {
+  const m = new RegExp(`^${name}\\s*=\\s*(.+?)\\s*(?:#.*)?$`, "m").exec(source);
+  assert.ok(m, `could not find ${name} in the runner`);
+  return m[1]!.trim();
+}
+
+test("the production launcher keeps its real training configuration", () => {
+  // These are the values the experiment was designed around. If a change here
+  // is deliberate, update this test in the same commit and say why.
+  assert.equal(setting(production, "GENERATIONS"), "40");
+  assert.equal(setting(production, "POPULATION"), "8");
+  assert.equal(setting(production, "SIGMA"), "0.2");
+  assert.equal(setting(production, "SEED"), "20260813");
+  assert.equal(setting(production, "PROMOTE"), "3");
+  assert.equal(setting(production, "VALIDATE"), "1");
+  assert.equal(setting(production, "HOURS"), "8.0");
+});
+
+test("the smoke test stays small enough to be worth running", () => {
+  const generations = Number(setting(smoke, "GENERATIONS"));
+  const population = Number(setting(smoke, "POPULATION"));
+  assert.ok(generations <= 2, `smoke generations crept up to ${generations}`);
+  assert.ok(population <= 4, `smoke population crept up to ${population}`);
+
+  // Validation is 21,816 matches per evaluation and runs for both the baseline
+  // and the elite. Enabling it would turn a 30-minute check into a multi-hour
+  // one while proving nothing the rest of the path has not already proven.
+  assert.equal(setting(smoke, "VALIDATE"), "0", "the smoke test must not run the validation tier");
+
+  // candidate.json is only written when something reached a full evaluation.
+  assert.ok(Number(setting(smoke, "PROMOTE")) >= 1, "promote 0 would produce no candidate at all");
+});
+
+test("the smoke test searches the same way, just less of it", () => {
+  // A smoke test on a different sigma or seed would exercise a different search
+  // and tell us less than it appears to.
+  assert.equal(setting(smoke, "SIGMA"), setting(production, "SIGMA"));
+  assert.equal(setting(smoke, "SEED"), setting(production, "SEED"));
+});
+
+test("both launchers drive the one CLI, not a second optimizer", () => {
+  for (const [name, source] of [["production", production], ["smoke", smoke]] as const) {
+    assert.match(source, /simulation\/src\/kaggleSearch\.ts/, `${name} does not call the search CLI`);
+    assert.ok(
+      !/optimize|hillClimb|annealing|genetic/.test(source),
+      `${name} appears to reach for a second optimizer`,
+    );
+  }
+});
+
+test("the smoke test writes somewhere the real run does not", () => {
+  // Sharing an output directory would let a smoke checkpoint be resumed by the
+  // real run, or the reverse — and the identity guard would reject it loudly at
+  // best, or silently waste a session at worst.
+  assert.notEqual(setting(smoke, "OUT"), setting(production, "OUT"));
+});
+
+test("neither launcher claims the project needs an API it no longer uses", () => {
+  // fs.globSync was removed for Node 20 compatibility. A stale error message
+  // naming it would send the next reader looking for a dependency that is gone.
+  for (const [name, source] of [["production", production], ["smoke", smoke]] as const) {
+    assert.ok(!source.includes("globSync"), `${name} still mentions fs.globSync`);
+  }
+});
+
+test("both launchers refuse a Node older than the deployment target", () => {
+  for (const [name, source] of [["production", production], ["smoke", smoke]] as const) {
+    assert.match(source, /major\s*<\s*20/, `${name} does not check the Node version`);
+  }
+});

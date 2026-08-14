@@ -73,7 +73,7 @@ def ensure_node():
     if major < 20:
         raise RuntimeError(
             f"node {version} is too old; this project needs >= 20 "
-            "(it uses node:test, worker_threads and fs.globSync)"
+            "(it uses node:test and worker_threads)"
         )
 
 

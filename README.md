@@ -37,8 +37,36 @@ npm run search -- --generations 40 --population 8 --hours 8 --out runs/search
 
 ## Kaggle
 
-`kaggle/kaggle_notebook.py` clones this repo, installs, runs the search and
-reports the artifacts. Paste it into a notebook cell with **Internet ON**.
+Two launchers, deliberately separate files rather than one file with a mode
+flag — a flag can be left in the wrong position, a file cannot be run by
+accident. Paste either into a notebook cell with **Internet ON**.
+
+| | | |
+|---|---|---|
+| `kaggle/kaggle_smoke.py` | **Smoke test.** Proves the pipeline executes. | ~60–95 min |
+| `kaggle/kaggle_notebook.py` | **The real run.** 40 generations, population 8. | up to 8 h |
+
+**Run the smoke test first.** It runs 1 generation at population 2, then
+re-runs with 2 generations against the same output directory to prove the
+search resumes from its checkpoint rather than restarting. It then checks every
+artifact and prints a pass/fail checklist.
+
+It costs ~16,500 matches, and that is the floor rather than a choice. The
+evaluation tiers are fixed constants because they are what make a reading mean
+anything, so the baseline's screen and full evaluations (7,416 matches) are
+unavoidable no matter how small the population. `VALIDATE = 0` matters most:
+the validation tier is 21,816 matches and runs for both the baseline and the
+elite, which would add several hours while proving nothing the rest of the path
+has not already proven.
+
+Both passes have been run end to end on Node 20.19.0: pass 1 took 34.8 minutes
+for 16,488 matches with zero failures, and pass 2 resumed from the checkpoint
+(reusing 5 cached evaluations) and cost only the new generation. Kaggle's four
+cores are slower than the twelve this was measured on, hence the wider range
+above.
+
+`test/kaggleRunners.test.ts` fails if the production configuration drifts, if
+the smoke test grows, or if either launcher stops driving the one CLI.
 
 A Kaggle session is killed on a hard clock — 9h interactive, 12h committed. Two
 things make that survivable:

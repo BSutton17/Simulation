@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+.env
+.DS_Store
+
+# Generated run output. The simulator itself is SOURCE and is tracked; only what
+# it produces is ignored.
+runs/
+simulation/runs/

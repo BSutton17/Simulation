@@ -1,0 +1,22 @@
+{
+  "name": "elementals-simulation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless balance simulation and CMA-ES balance search for Elementals",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "sim": "tsx simulation/src/cli.ts",
+    "search": "tsx simulation/src/kaggleSearch.ts",
+    "smoke": "tsx simulation/src/kaggleSearch.ts --generations 1 --population 4 --promote 1 --validate 0 --out runs/smoke"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "tsx": "^4.22.5",
+    "typescript": "^6.0.3"
+  }
+}

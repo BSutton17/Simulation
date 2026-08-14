@@ -14,10 +14,20 @@ evidence behind it. Applying one is a deliberate human act.
 
 ```bash
 npm install
-npm test          # 80 test files
+npm test              # 70 test files
+npm run test:list     # show exactly which files will run
 npm run typecheck
-npm run smoke     # one generation, ~15 min, proves the pipeline works
+npm run smoke         # one generation, ~15 min, proves the pipeline works
 ```
+
+`npm test` runs `scripts/test.mjs`, which discovers test files in Node rather
+than in a shell glob. That is not incidental: `--test "test/**/*.test.ts"`
+means different things depending on who expands the pattern — bash expands it
+before Node sees it, cmd.exe does not expand it at all, and Node's own glob
+handling varies by version. On Windows that combination spawned eleven child
+processes and hung without reporting a single test. Passing explicit paths
+removes the shell from the question, so the command behaves identically on
+Kaggle's Linux image and on Windows.
 
 A real search:
 
@@ -53,7 +63,41 @@ presenting the result as one is a worse failure than starting over.
 | `simulation/src/evaluation` | Plans and runs matches across a worker pool; reports rates with Wilson intervals. |
 | `simulation/src/fitness` | Turns a reading into a score. The only place that judges. |
 | `simulation/src/search` | Parameter schema, CMA-ES, checkpointing, the search loop. |
-| `test` | 80 test files covering the engine and the simulator. |
+| `test` | 70 test files covering the engine and the simulator. |
+| `scripts/test.mjs` | Cross-platform test discovery and runner. |
+
+## Which tests live here, and which do not
+
+This repository holds the tests that exercise the **engine, the simulation and
+the balance pipeline**. The 21 tests that exercise the **transport layer**
+belong to the production Server repository and are deliberately absent — they
+cannot pass here, and adding Socket.IO to make them pass would destroy the
+property that lets this repo run on a bare cloud runner.
+
+The split is derived, not hand-maintained. `simulation/tools/exportRepo.mjs`
+upstream classifies every test by four checks, and `test/boundary.test.ts` here
+re-asserts the result on every run:
+
+| Excluded because | Count | Tests |
+|---|---:|---|
+| Imports `src/net` (transport modules) | 9 | `abilityCosts`, `economyIntegration`, `gameEventsTransport`, `gameLoop`, `matchManager`, `newKingdomPassives`, `placeholderKingdoms`, `reconnectionManager`, `roomCode` |
+| Needs `socket.io-client` and boots the server | 8 | `disconnect`, `gameSync`, `lobby`, `matchBuy`, `matchTarget`, `session`, `startup`, `stress` |
+| Boots the production server (`src/index.ts`) | 1 | `health` |
+| Imports server config or logging (`src/config`, `src/util`) | 3 | `config`, `errorHandling`, `logging` |
+
+**21 excluded, 69 exported, plus the boundary guard = 70 files here.** Several
+tests fail more than one check; each is counted once, under its primary reason.
+
+Three of those categories are invisible to ordinary import analysis, which is
+why the first export shipped them by mistake:
+
+- `import { io } from "socket.io-client"` has **no relative dependency** on the
+  transport layer at all, so a walker following only `./` specifiers waves it
+  through.
+- `test/helpers/server.ts` imports nothing but `node:child_process`, then
+  **spawns** `src/index.ts`.
+- `config.test.ts` names its fixture by **string path**, so no dependency graph
+  could see it and the fixture stayed behind while the test travelled.
 
 ### The engine is vendored, not owned
 

@@ -1,7 +1,7 @@
 {
-  "engineSha": "933aec8dc3cfa4f26df098b9611d7f1121deba2b",
+  "engineSha": "36d9ce3eb0fc106c7b0a5ec8c00bcf06dee9431f",
   "engineDirty": false,
-  "exportedAt": "2026-08-14T04:39:20.473Z",
+  "exportedAt": "2026-08-14T06:40:44.247Z",
   "upstream": "elementals/Server",
   "note": "Identity of the game engine vendored into this repository. Provenance reads this instead of this repo's own commit, so readings taken here stay comparable with readings taken upstream."
 }

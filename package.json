@@ -9,7 +9,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "test": "node scripts/test.mjs",
+    "test:list": "node scripts/test.mjs --list",
     "sim": "tsx simulation/src/cli.ts",
     "search": "tsx simulation/src/kaggleSearch.ts",
     "smoke": "tsx simulation/src/kaggleSearch.ts --generations 1 --population 4 --promote 1 --validate 0 --out runs/smoke"

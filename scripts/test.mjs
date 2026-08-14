@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
-import { globSync } from "node:fs";
-import { sep } from "node:path";
+import { findByExtension } from "./lib/findFiles.mjs";
 
 /**
  * Test runner for the standalone simulation repository.
@@ -15,6 +14,10 @@ import { sep } from "node:path";
  * Passing explicit paths removes the shell from the question entirely, so the
  * same command means the same thing on Kaggle's Linux image and on Windows.
  *
+ * Discovery uses `scripts/lib/findFiles.mjs` rather than `fs.globSync`, which
+ * does not exist before Node 22 and made this file throw at import on Kaggle's
+ * Node 20 before any test could run.
+ *
  *   node scripts/test.mjs            all tests
  *   node scripts/test.mjs search     only files matching "search"
  *   node scripts/test.mjs --list     print the file list and exit
@@ -24,10 +27,9 @@ const args = process.argv.slice(2);
 const listOnly = args.includes("--list");
 const filters = args.filter((a) => !a.startsWith("--"));
 
-const files = globSync("test/**/*.test.ts")
-  .map((f) => f.split(sep).join("/"))
-  .filter((f) => filters.length === 0 || filters.some((needle) => f.includes(needle)))
-  .sort();
+const files = findByExtension("test", ".test.ts").filter(
+  (f) => filters.length === 0 || filters.some((needle) => f.includes(needle)),
+);
 
 if (files.length === 0) {
   console.error(

@@ -1,0 +1,57 @@
+{
+  "note": [
+    "APIs newer than some Node version this repository claims to support.",
+    "test/boundary.test.ts reads this file and fails if any source file uses an",
+    "entry newer than package.json engines.node.",
+    "",
+    "This lives in JSON rather than in the test because the test scans .ts and",
+    ".mjs files for these very patterns — a denylist written in TypeScript",
+    "matches itself and reports the guard as its own violation.",
+    "",
+    "Patterns match USAGE (a call or an import), not a mention, so discussing an",
+    "API in a comment or a string does not trip the check.",
+    "",
+    "Add an entry whenever a newer API becomes tempting. A wrong entry costs a",
+    "failing test with an explanation. A missing one costs a cloud run that dies",
+    "at module load, an hour into a queue, with an error naming neither the",
+    "version nor the file."
+  ],
+  "apis": [
+    {
+      "api": "fs.globSync",
+      "since": "22.0",
+      "pattern": "\\bglobSync\\s*\\(|\\bglobSync\\s*[,}]",
+      "why": "Broke the Kaggle run at commit 7b32a48; Kaggle is Node 20.19."
+    },
+    {
+      "api": "fs.glob / fsPromises.glob",
+      "since": "22.0",
+      "pattern": "\\bfs\\.glob\\s*\\(|\\bfsPromises\\.glob\\s*\\("
+    },
+    {
+      "api": "node:sqlite",
+      "since": "22.5",
+      "pattern": "from\\s*[\"']node:sqlite[\"']"
+    },
+    {
+      "api": "process.getBuiltinModule",
+      "since": "22.3",
+      "pattern": "\\bprocess\\.getBuiltinModule\\s*\\("
+    },
+    {
+      "api": "node:test mock.module",
+      "since": "22.3",
+      "pattern": "\\bmock\\.module\\s*\\("
+    },
+    {
+      "api": "util.styleText",
+      "since": "20.12",
+      "pattern": "\\bstyleText\\s*\\("
+    },
+    {
+      "api": "fs.readdirSync recursive option",
+      "since": "20.1",
+      "pattern": "readdirSync\\([^)]*recursive\\s*:\\s*true"
+    }
+  ]
+}

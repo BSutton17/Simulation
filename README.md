@@ -161,4 +161,29 @@ implements that gate.
 
 ## Requirements
 
-Node 20 or newer. No runtime dependencies; `tsx` and `typescript` are dev-only.
+**Node 20 or newer**, and Node 20 is not a formality — Kaggle's image is
+20.19.0. No runtime dependencies; `tsx` and `typescript` are dev-only.
+
+Developing on a newer Node is fine, but "it works here" proves very little
+about the deployment target, and two failures have already reached Kaggle that
+no local run could reproduce:
+
+- `fs.globSync` arrived in **Node 22**. The test runner imported it, so on
+  Kaggle the runner threw at module load — before a single test ran, with an
+  error naming neither the version nor the cause.
+- `node:test` is absent from `builtinModules` on Node 20 but present on Node 24,
+  because it is reachable only via the `node:` prefix. A membership check
+  against `builtinModules` passes locally and then condemns every test file.
+
+Two guards in `test/boundary.test.ts` keep this from recurring:
+
+- **No source file may use an API newer than `engines.node`.** The version
+  floor lives in `scripts/lib/nodeApiFloor.json` — as data, because the check
+  scans `.ts` and `.mjs` for those very patterns and a denylist written in
+  TypeScript matches itself. Patterns match a call or an import, not a mention,
+  so discussing an API in a comment does not trip it.
+- **The declared floor must stay at or below Node 20**, so nobody raises it past
+  the deployment target while every local check still passes.
+
+Neither guard can substitute for running on the real thing. This fix was
+verified against a genuine Node 20.19.0 binary, not just statically.

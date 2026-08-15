@@ -50,8 +50,14 @@ PROMOTE = 1
 VALIDATE = 1
 
 # Stop at a generation boundary with time to spare. The budget is only checked
-# BETWEEN generations, so a generation starting just under the limit overruns
-# it; 7.0 leaves room for that plus the artifacts on a 9-hour session.
+# BETWEEN generations, so a generation starting just under it overruns by up to
+# one generation — measured at 58.5 minutes on this Kaggle machine.
+#
+# 7.0 is sized for a 9-hour interactive session and is safe in a batch session
+# too. If you confirm the batch limit is 12 hours, raising this to 10.5 fits ten
+# generations per session instead of seven and finishes the run in two sessions
+# rather than three. Raise it only after confirming the limit: overshooting
+# means the session is killed mid-generation, losing that generation's work.
 HOURS = 7.0
 
 # Measured on this Kaggle machine: 2 workers gave 19.85 match/s against 18.64
@@ -62,6 +68,18 @@ WORKERS = 2
 # --- persistence -------------------------------------------------------------
 PERSIST = True
 DATASET_NAME = "elementals-checkpoint"
+
+# Abort before starting if the checkpoint cannot be persisted.
+#
+# Unattended is the whole point of a batch run, and an unattended run without
+# persistence is the worst of both worlds: hours of compute with nobody watching
+# and nothing to recover. Failing in the first minute is far better than
+# discovering it in the twelfth hour. Set False only for a deliberate throwaway.
+REQUIRE_PERSISTENCE = True
+
+# Your Kaggle username. Leave blank to detect it from the CLI; set it if
+# detection ever fails, since a batch session has no one to ask.
+USERNAME = ""
 # Seconds between checks of the checkpoint file. Generations take the better
 # part of an hour, so this is not a hot loop.
 WATCH_SECONDS = 60
@@ -184,7 +202,7 @@ def setup_persistence():
         return None, None, None
     print(f"  authenticated via: {mode}", flush=True)
 
-    username = os.environ.get("KAGGLE_USERNAME")
+    username = USERNAME or os.environ.get("KAGGLE_USERNAME")
     if not username:
         try:
             exe = shutil.which("kaggle")
@@ -195,7 +213,10 @@ def setup_persistence():
         except Exception:
             pass
     if not username:
-        print("  could not determine the Kaggle username — persistence disabled", flush=True)
+        # Never prompt. A batch session has no stdin, and asking would hang the
+        # run until the session times out with nothing to show for it.
+        print("  could not determine the Kaggle username — set USERNAME at the "
+              "top of this file", flush=True)
         return None, None, None
 
     slug = f"{username}/{DATASET_NAME}"
@@ -249,6 +270,15 @@ def main():
     sh(["npm", "run", "build"], cwd=SRC)
 
     store, backend, mirror = setup_persistence()
+
+    if PERSIST and REQUIRE_PERSISTENCE and mirror is None:
+        raise RuntimeError(
+            "checkpoint persistence could not be set up, and REQUIRE_PERSISTENCE is on.\n"
+            "  An unattended run without persistence risks losing every hour it computes.\n"
+            "  Fix: attach KAGGLE_API_TOKEN under Add-ons -> Secrets, and set USERNAME\n"
+            "  at the top of this file if the username could not be detected.\n"
+            "  To run anyway, set REQUIRE_PERSISTENCE = False."
+        )
 
     if RESUME_FROM and not mirror:
         source = Path(RESUME_FROM)

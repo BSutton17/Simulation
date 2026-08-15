@@ -51,6 +51,30 @@ test("the production launcher keeps its real training configuration", () => {
   assert.equal(setting(production, "WORKERS"), "2");
 });
 
+test("the production launcher can run unattended in a batch session", () => {
+  // "Save & Run All" executes the notebook on Kaggle's servers with no browser
+  // attached and no stdin. Anything that waits for a human hangs until the
+  // session times out, having produced nothing.
+  assert.ok(
+    !/\binput\s*\(/.test(production),
+    "the launcher prompts for input, which would hang a batch session forever",
+  );
+  assert.ok(!/getpass|sys\.stdin/.test(production), "the launcher reads from stdin");
+
+  // An unattended run without persistence is the worst case: hours of compute,
+  // nobody watching, nothing recoverable. It must refuse to start.
+  assert.match(production, /REQUIRE_PERSISTENCE/, "no guard against running unprotected");
+
+  // The username must be settable, because a batch session has nobody to ask.
+  assert.match(production, /^USERNAME\s*=/m, "the username cannot be set explicitly");
+
+  // The final push happens in a finally block, so it runs even if the search
+  // raises — otherwise a crash would discard the generations before it.
+  const finallyAt = production.indexOf("finally:");
+  const stopAt = production.indexOf("mirror.stop()");
+  assert.ok(finallyAt > 0 && stopAt > finallyAt, "the final push is not in a finally block");
+});
+
 test("the production launcher mirrors its checkpoint off the session", () => {
   // The failure this exists to prevent: /kaggle/working belongs to a session,
   // and a completed generation was lost when the session was replaced.

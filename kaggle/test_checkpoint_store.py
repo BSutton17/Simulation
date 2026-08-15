@@ -25,6 +25,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -319,6 +320,54 @@ def main():
             if moved:
                 shutil.move(moved, home_token)
             os.environ["KAGGLE_USERNAME"], os.environ["KAGGLE_KEY"] = saved_user, saved_key
+
+        print("\nLAUNCHER MIRROR — publishing while the search runs")
+        # The production launcher watches the checkpoint file in a thread and
+        # publishes when it advances. Pushing only at the end would protect
+        # against nothing, since the end is what a lost session never reaches.
+        import importlib
+
+        launcher = importlib.import_module("kaggle_notebook")
+        launcher.WATCH_SECONDS = 0.2  # the real value is 60
+
+        mirror_backend = store.KaggleDatasetStore(
+            "testuser/elementals-mirror-test", workdir=str(workspace / "mirror-work")
+        )
+        mirror_backend.create(title="mirror test")
+
+        live = workspace / "live" / "checkpoint.json"
+        live.parent.mkdir(parents=True, exist_ok=True)
+        live.write_text(json.dumps(make_checkpoint(completed=1)), encoding="utf-8")
+
+        mirror = launcher.CheckpointMirror(store, mirror_backend, live)
+        mirror.start()
+        for generation in (2, 3):
+            live.write_text(json.dumps(make_checkpoint(completed=generation)), encoding="utf-8")
+            deadline = time.time() + 5
+            while time.time() < deadline and mirror.pushes < generation - 1:
+                time.sleep(0.1)
+        mirror.stop()
+
+        check("the mirror published while the search was running", mirror.pushes >= 2,
+              f"{mirror.pushes} versions")
+
+        landed = workspace / "live" / "landed.json"
+        ok, _ = store.pull_latest(mirror_backend, landed)
+        stored = json.loads(landed.read_text()) if landed.exists() else {}
+        check("the newest generation reached the dataset",
+              stored.get("completedGenerations") == 3,
+              f"stored generation {stored.get('completedGenerations')}")
+
+        # A push failure must not take the run down with it.
+        broken = store.KaggleDatasetStore("testuser/never-created-mirror",
+                                          workdir=str(workspace / "broken-work"))
+        survivor = launcher.CheckpointMirror(store, broken, live)
+        crashed = False
+        try:
+            survivor._push("provoke a failure")
+        except Exception:
+            crashed = True
+        check("a failed push is reported, not raised", not crashed)
 
         print("\n" + "=" * 70)
         print(f"{len(PASSED)} passed, {len(FAILED)} failed")

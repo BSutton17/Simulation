@@ -10,3 +10,5 @@ dist/
 runs/
 simulation/runs/
 dist-base/
+__pycache__/
+*.pyc

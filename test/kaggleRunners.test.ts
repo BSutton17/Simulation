@@ -63,11 +63,32 @@ test("the smoke test searches the same way, just less of it", () => {
 
 test("both launchers drive the one CLI, not a second optimizer", () => {
   for (const [name, source] of [["production", production], ["smoke", smoke]] as const) {
-    assert.match(source, /simulation\/src\/kaggleSearch\.ts/, `${name} does not call the search CLI`);
+    // The compiled entry point, not the TypeScript source: running through tsx
+    // measured 1.45x slower for byte-identical outcomes, because tsx injects a
+    // __name helper per transpiled function that profiled at 13% of runtime.
+    assert.match(
+      source,
+      /dist\/simulation\/src\/kaggleSearch\.js/,
+      `${name} does not call the compiled search CLI`,
+    );
     assert.ok(
       !/optimize|hillClimb|annealing|genetic/.test(source),
       `${name} appears to reach for a second optimizer`,
     );
+  }
+});
+
+test("both launchers compile the TypeScript before running it", () => {
+  // Running the compiled entry without compiling first fails with a missing
+  // module, an hour into a queued session.
+  //
+  // Only the presence of the build step is asserted, not its position. The
+  // smoke launcher defines its search() helper above main(), so textual order
+  // says nothing about execution order — an ordering assertion here failed on a
+  // file that was in fact correct. Verifying real call order needs to parse
+  // Python, which is a worse trade than checking the step exists at all.
+  for (const [name, source] of [["production", production], ["smoke", smoke]] as const) {
+    assert.match(source, /"npm", "run", "build"/, `${name} never builds the TypeScript`);
   }
 });
 

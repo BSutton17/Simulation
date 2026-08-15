@@ -9,3 +9,4 @@ dist/
 # it produces is ignored.
 runs/
 simulation/runs/
+dist-base/

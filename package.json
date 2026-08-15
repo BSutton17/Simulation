@@ -12,8 +12,12 @@
     "test": "node scripts/test.mjs",
     "test:list": "node scripts/test.mjs --list",
     "sim": "tsx simulation/src/cli.ts",
-    "search": "tsx simulation/src/kaggleSearch.ts",
-    "smoke": "tsx simulation/src/kaggleSearch.ts --generations 1 --population 4 --promote 1 --validate 0 --out runs/smoke"
+    "search": "node dist/simulation/src/kaggleSearch.js",
+    "smoke": "node dist/simulation/src/kaggleSearch.js --generations 1 --population 4 --promote 1 --validate 0 --out runs/smoke",
+    "build": "tsc -p tsconfig.build.json",
+    "search:tsx": "tsx simulation/src/kaggleSearch.ts",
+    "bench": "node dist/simulation/src/perf/profile.js",
+    "profile": "node --cpu-prof --cpu-prof-dir=runs/prof dist/simulation/src/perf/profile.js"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

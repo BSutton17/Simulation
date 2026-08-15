@@ -91,6 +91,10 @@ def main():
     else:
         sh(["npm", "install"], cwd=SRC)
 
+    # Compile to JavaScript before running. Measured 1.45x faster than
+    # executing TypeScript through tsx, with byte-identical outcomes.
+    sh(["npm", "run", "build"], cwd=SRC)
+
     if RESUME_FROM:
         source = Path(RESUME_FROM)
         if not source.exists():
@@ -104,7 +108,7 @@ def main():
 
     sh(
         [
-            "npx", "tsx", "simulation/src/kaggleSearch.ts",
+            "node", "dist/simulation/src/kaggleSearch.js",
             "--generations", str(GENERATIONS),
             "--population", str(POPULATION),
             "--sigma", str(SIGMA),

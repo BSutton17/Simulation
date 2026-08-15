@@ -68,6 +68,72 @@ above.
 `test/kaggleRunners.test.ts` fails if the production configuration drifts, if
 the smoke test grows, or if either launcher stops driving the one CLI.
 
+### Surviving a lost session
+
+`/kaggle/working` belongs to a **session**, not to a notebook. Closing the tab
+or being handed a new Draft Session gives you a fresh, empty one. A checkpoint
+written there is safe from interruption *within* a session and gone the moment
+the session is — which is exactly how a completed generation was lost.
+
+`kaggle/checkpoint_store.py` persists the checkpoint to a **Kaggle Dataset**
+via the Kaggle API, generation by generation. Of the three mechanisms Kaggle
+offers, it is the only one that persists *during* a session: "Save Version"
+only captures state when a batch run ends, and manual download depends on
+somebody being awake at the right moment.
+
+**One-time setup** (about five minutes):
+
+1. On kaggle.com: **Settings → API → Create New Token**. A `kaggle.json`
+   downloads containing a username and a key.
+2. In your notebook: **Add-ons → Secrets → Add a new secret**, twice —
+   `KAGGLE_USERNAME` and `KAGGLE_KEY`, using the values from that file.
+   Attach both secrets to the notebook.
+3. Delete the downloaded `kaggle.json`. It is never needed again, and it must
+   never be committed — `test/kagglePersistence.test.ts` fails if one appears
+   in the repository.
+
+The store then creates a dataset (once) and adds a version after each
+generation. A new session pulls the newest version and resumes.
+
+Two guards prevent the obvious ways this goes wrong. A push is refused if the
+dataset already holds **more** finished work, so a resumed session that crashes
+early cannot overwrite good progress with its stale copy; comparison is by
+generations and stage, never by timestamp, because two sessions can overlap. A
+pull is refused if the stored checkpoint belongs to a **different run**, so an
+unrelated experiment cannot be spliced into this one.
+
+**What is tested and what is not.** `kaggle/test_checkpoint_store.py` runs the
+real store against an emulated Kaggle CLI — same subcommands, flags, and
+zip/unzip round trip — reproducing the session-loss failure and checking the
+checkpoint returns byte-for-byte with its CMA-ES state, RNG state and all
+twelve identity fields intact. 28 assertions, run as part of `npm test`.
+
+It does **not** prove Kaggle's servers behave that way. Authentication, quotas,
+dataset visibility and version propagation can only be checked on Kaggle. Before
+trusting a multi-session run, do this once by hand: run the smoke test, confirm
+a dataset version appears under your account, then open a **new** session and
+confirm it resumes rather than starting over.
+
+## Worker count
+
+```bash
+npm run build
+npm run bench:workers -- --counts 1,2,3,4,6,8 --repeats 3
+```
+
+Reports matches/sec, speedup, efficiency and memory per worker count, and
+verifies outcomes are **identical** across all of them — a worker count that
+were faster but changed results would be worthless.
+
+Measured on a 12-logical-core development box, throughput was flat past three
+workers: 3 gave 28.8 match/s, 4 gave 30.4, 6 gave 31.0 and 8 gave 28.6. Two
+repeats proved too few — one pass produced 10.5 match/s at six workers against
+31.0 on the next — so **use `--repeats 3` or more**, and ignore any single row.
+
+These numbers describe that machine. Kaggle has four logical cores, and the
+production runner uses `cpu_count() - 1`. Run the benchmark on Kaggle before
+changing that; do not copy the local answer.
+
 A Kaggle session is killed on a hard clock — 9h interactive, 12h committed. Two
 things make that survivable:
 

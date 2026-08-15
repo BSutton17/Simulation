@@ -17,7 +17,9 @@
     "build": "tsc -p tsconfig.build.json",
     "search:tsx": "tsx simulation/src/kaggleSearch.ts",
     "bench": "node dist/simulation/src/perf/profile.js",
-    "profile": "node --cpu-prof --cpu-prof-dir=runs/prof dist/simulation/src/perf/profile.js"
+    "profile": "node --cpu-prof --cpu-prof-dir=runs/prof dist/simulation/src/perf/profile.js",
+    "bench:workers": "node dist/simulation/src/perf/workerBench.js",
+    "test:persistence": "python kaggle/test_checkpoint_store.py"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

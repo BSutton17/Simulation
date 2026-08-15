@@ -108,8 +108,18 @@ class KaggleDatasetStore:
         return f"kaggle:{self.slug}"
 
     def _run(self, args, check=True):
+        # Resolved through PATH rather than passed as a bare name. On Windows
+        # the CLI installs as kaggle.exe or kaggle.cmd, and subprocess will not
+        # find either from the bare string without a shell — which we do not
+        # want, because a shell would also start quoting our arguments.
+        executable = shutil.which("kaggle")
+        if executable is None:
+            raise RuntimeError(
+                "the `kaggle` command is not on PATH — install it with "
+                "`pip install kaggle`, or set up credentials first"
+            )
         result = subprocess.run(
-            ["kaggle", *args], capture_output=True, text=True
+            [executable, *args], capture_output=True, text=True
         )
         if check and result.returncode != 0:
             raise RuntimeError(

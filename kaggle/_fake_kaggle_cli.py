@@ -34,11 +34,28 @@ def root():
 
 
 def require_credentials():
-    """The real CLI refuses to do anything without credentials."""
-    token = Path.home() / ".kaggle" / "kaggle.json"
-    if not token.exists() and not (os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY")):
-        sys.stderr.write("Could not find kaggle.json. Authentication failed.\n")
-        sys.exit(1)
+    """
+    Accepts the same credentials the real CLI documents, in the same order.
+
+    On failure it dumps its environment, which is exactly what makes the
+    redaction test worth running: if our code let a token reach a log or an
+    exception, this is where it would surface.
+    """
+    if os.environ.get("KAGGLE_API_TOKEN"):
+        return
+    if (Path.home() / ".kaggle" / "access_token").exists():
+        return
+    if os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"):
+        return
+    if (Path.home() / ".kaggle" / "kaggle.json").exists():
+        return
+
+    sys.stderr.write("Authentication failed. No API token found.\n")
+    sys.stderr.write("environment at failure:\n")
+    for key, value in sorted(os.environ.items()):
+        if key.startswith("KAGGLE") or key == "FAKE_KAGGLE_ROOT":
+            sys.stderr.write(f"  {key}={value}\n")
+    sys.exit(1)
 
 
 def dataset_dir(slug):

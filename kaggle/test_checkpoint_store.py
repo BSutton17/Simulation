@@ -192,6 +192,114 @@ def main():
         ok, message = store.pull_latest(backend, target)
         check("a corrupt stored checkpoint is refused", not ok, message)
 
+        print("\nAUTHENTICATION — current API token")
+        # The token Kaggle issues now, in place of the legacy username/key pair.
+        # Deliberately distinctive so it can be searched for anywhere it might leak.
+        TOKEN = "kgl_test_TOKEN_c0ffee1234567890abcd"
+        saved_legacy = (os.environ.pop("KAGGLE_USERNAME", None), os.environ.pop("KAGGLE_KEY", None))
+        legacy_file = Path.home() / ".kaggle" / "kaggle.json"
+        moved_legacy = None
+        if legacy_file.exists():
+            moved_legacy = legacy_file.with_suffix(".json.testbak")
+            shutil.move(legacy_file, moved_legacy)
+        token_file = Path.home() / ".kaggle" / "access_token"
+        moved_token = None
+        if token_file.exists():
+            moved_token = token_file.with_suffix(".testbak")
+            shutil.move(token_file, moved_token)
+
+        try:
+            os.environ["KAGGLE_API_TOKEN"] = TOKEN
+            mode = store.configure_credentials()
+            check("KAGGLE_API_TOKEN is the preferred credential", mode == "token", f"mode={mode}")
+            check("no legacy username/key was required",
+                  not os.environ.get("KAGGLE_USERNAME") and not os.environ.get("KAGGLE_KEY"))
+            check("configure_credentials does not return the token", TOKEN not in str(mode))
+            check("access_token file written outside the working directory",
+                  token_file.exists() and "kaggle/working" not in str(token_file).replace("\\", "/"))
+            check("no kaggle.json was created", not legacy_file.exists())
+
+            # A real round trip, authenticated by the token alone. Its own
+            # dataset: the shared one has a deliberately corrupt version pushed
+            # to it by an earlier scenario, and pulling that would fail for a
+            # reason that has nothing to do with authentication.
+            token_backend = store.KaggleDatasetStore(
+                "testuser/elementals-token-test", workdir=str(workspace / "token-work")
+            )
+            token_backend.create(title="token auth test")
+            source = session2 / "token-source.json"
+            source.write_text(json.dumps(make_checkpoint(completed=5)), encoding="utf-8")
+            ok, message = store.push_if_newer(token_backend, source, "token auth")
+            check("a push succeeds on token auth alone", ok, message)
+            check("the token does not appear in operation output", TOKEN not in message)
+
+            token_only = session2 / "token-only.json"
+            ok, message = store.pull_latest(token_backend, token_only)
+            check("a pull succeeds on token auth alone", ok, message)
+            check("the round trip preserved the checkpoint",
+                  token_only.exists()
+                  and json.loads(token_only.read_text())["completedGenerations"] == 5)
+
+            print("\nTOKEN CONTAINMENT")
+            # Force a failure so the emulator dumps its environment — the most
+            # likely route for a credential to escape into a notebook log.
+            missing = store.KaggleDatasetStore("testuser/never-created",
+                                               workdir=str(workspace / "missing-work"))
+            leaked = None
+            try:
+                # Downloading a dataset that was never created is a hard 404,
+                # which is what makes the emulator dump its environment.
+                missing._run(["datasets", "download", "-d", "testuser/never-created",
+                              "-p", str(workspace / "nowhere")])
+            except RuntimeError as error:
+                leaked = str(error)
+            check("a CLI failure surfaces as an error", leaked is not None)
+            if leaked:
+                check("the token is redacted from the error", TOKEN not in leaked,
+                      "redacted" if TOKEN not in leaked else "LEAKED")
+                check("redaction is visible rather than silent", "REDACTED" in leaked or TOKEN not in leaked)
+
+            check("redact() scrubs a registered secret",
+                  TOKEN not in store.redact(f"auth used {TOKEN} here"))
+
+            # Nothing the store publishes may carry the credential.
+            payload = Path(backend.workdir)
+            published = []
+            if payload.exists():
+                for path in payload.rglob("*"):
+                    if path.is_file():
+                        try:
+                            published.append(path.read_text(encoding="utf-8", errors="ignore"))
+                        except OSError:
+                            pass
+            check("the token is absent from every published file",
+                  not any(TOKEN in text for text in published),
+                  f"{len(published)} files checked")
+
+            metadata = json.loads((payload / "dataset-metadata.json").read_text())
+            check("dataset metadata carries no credential", TOKEN not in json.dumps(metadata))
+
+            recovered_after_token = json.loads(token_only.read_text()) if token_only.exists() else {}
+            check("checkpoint content is unaffected by the auth change",
+                  TOKEN not in json.dumps(recovered_after_token))
+        finally:
+            os.environ.pop("KAGGLE_API_TOKEN", None)
+            if token_file.exists():
+                token_file.unlink()
+            if moved_token:
+                shutil.move(moved_token, token_file)
+            if moved_legacy:
+                shutil.move(moved_legacy, legacy_file)
+            if saved_legacy[0]:
+                os.environ["KAGGLE_USERNAME"] = saved_legacy[0]
+            if saved_legacy[1]:
+                os.environ["KAGGLE_KEY"] = saved_legacy[1]
+
+        print("\nAUTHENTICATION — legacy fallback still works")
+        os.environ["KAGGLE_USERNAME"], os.environ["KAGGLE_KEY"] = "testuser", "legacykey12345678"
+        mode = store.configure_credentials()
+        check("legacy pair is used when no token is present", mode == "legacy", f"mode={mode}")
+
         print("\nCREDENTIALS")
         saved_user, saved_key = os.environ.pop("KAGGLE_USERNAME"), os.environ.pop("KAGGLE_KEY")
         home_token = Path.home() / ".kaggle" / "kaggle.json"

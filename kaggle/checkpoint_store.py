@@ -39,8 +39,24 @@ This module implements (2) with (3) as the documented fallback, because only
 CREDENTIALS
 -----------
 No token is stored in this repository, and none should ever be committed. The
-token is read from Kaggle's own secret store (Add-ons -> Secrets) at runtime.
-Setup instructions are in README under "Kaggle".
+credential is read from Kaggle's own secret store (Add-ons -> Secrets) at
+runtime. Setup instructions are in README under "Kaggle".
+
+Kaggle now issues a single API TOKEN rather than the older username/key pair,
+and documents two ways to supply it: the KAGGLE_API_TOKEN environment variable,
+or a file at ~/.kaggle/access_token. Both are implemented here, token first,
+with the legacy KAGGLE_USERNAME/KAGGLE_KEY pair kept only as a fallback for
+older CLI builds.
+
+Which of these a given `kaggle` build actually honours could not be verified
+from the development environment — the CLI is not installed there and there is
+no network access to check. `configure_credentials` therefore reports the mode
+it selected so a real session shows in its log which path was taken, and sets
+up every mechanism it can rather than betting on one.
+
+The token is treated as radioactive throughout: it is never printed, never
+written into a dataset payload, and subprocess output is redacted before it can
+reach a log or an exception message.
 """
 
 import json
@@ -122,9 +138,12 @@ class KaggleDatasetStore:
             [executable, *args], capture_output=True, text=True
         )
         if check and result.returncode != 0:
+            # Redacted before it becomes an exception. The CLI echoes its
+            # configuration on some failures, and an unredacted traceback in a
+            # notebook is a published traceback.
             raise RuntimeError(
                 f"kaggle {' '.join(args)} failed ({result.returncode}):\n"
-                f"{result.stdout}\n{result.stderr}"
+                f"{redact(result.stdout)}\n{redact(result.stderr)}"
             )
         return result
 
@@ -184,41 +203,96 @@ class KaggleDatasetStore:
 # --------------------------------------------------------------------------
 
 
-def configure_credentials():
-    """
-    Puts a Kaggle API token where the CLI expects it, from Kaggle Secrets.
+# Secret values seen this process, so they can be scrubbed from anything we
+# print or raise. A token that reaches a notebook log is a token that reaches
+# whoever the notebook is shared with.
+_SECRETS = set()
 
-    Reads the secrets named KAGGLE_USERNAME and KAGGLE_KEY. Nothing is printed
-    and nothing is written to the repository — the token lands in
-    ~/.kaggle/kaggle.json with owner-only permissions, which is where the CLI
-    looks and nowhere a notebook output would capture it.
 
-    Returns the username, or None when secrets are not configured.
-    """
-    username = os.environ.get("KAGGLE_USERNAME")
-    key = os.environ.get("KAGGLE_KEY")
+def remember_secret(value):
+    """Registers a value for redaction. Short strings are ignored: redacting a
+    two-character value would blank out unrelated text and hide real errors."""
+    if value and len(str(value)) >= 8:
+        _SECRETS.add(str(value))
 
-    if not (username and key):
-        try:
-            from kaggle_secrets import UserSecretsClient  # only exists on Kaggle
 
-            secrets = UserSecretsClient()
-            username = secrets.get_secret("KAGGLE_USERNAME")
-            key = secrets.get_secret("KAGGLE_KEY")
-        except Exception as error:  # not on Kaggle, or secrets not attached
-            print(f"  Kaggle secrets unavailable: {type(error).__name__}")
-            return None
+def redact(text):
+    """Replaces every known secret in `text`. Applied to all CLI output before
+    it can be logged or wrapped in an exception."""
+    if not text:
+        return text
+    cleaned = str(text)
+    for secret in _SECRETS:
+        cleaned = cleaned.replace(secret, "***REDACTED***")
+    return cleaned
 
-    if not (username and key):
+
+def _read_secret(name):
+    """Environment first, then Kaggle's secret store."""
+    value = os.environ.get(name)
+    if value:
+        return value.strip()
+    try:
+        from kaggle_secrets import UserSecretsClient  # only exists on Kaggle
+
+        value = UserSecretsClient().get_secret(name)
+        return value.strip() if value else None
+    except Exception:
+        # Not on Kaggle, or this secret is not attached. Absence is normal —
+        # the caller decides whether it had enough to proceed.
         return None
 
-    path = Path.home() / ".kaggle" / "kaggle.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"username": username, "key": key}))
-    path.chmod(0o600)
-    os.environ["KAGGLE_USERNAME"] = username
-    os.environ["KAGGLE_KEY"] = key
-    return username
+
+def configure_credentials():
+    """
+    Makes a Kaggle credential available to the CLI, without a downloaded file.
+
+    Order of preference:
+
+      1. KAGGLE_API_TOKEN — the current mechanism. Exported to the environment
+         and also written to ~/.kaggle/access_token, because Kaggle documents
+         both and which one a given CLI build reads could not be verified here.
+      2. KAGGLE_USERNAME + KAGGLE_KEY — legacy pair, for older CLI builds.
+
+    Credential files land in the home directory with owner-only permissions,
+    never in /kaggle/working, so they cannot be swept up as notebook output.
+
+    Returns the mode used ("token", "legacy") or None. The token itself is
+    never returned, printed or logged.
+    """
+    token = _read_secret("KAGGLE_API_TOKEN")
+    if token:
+        remember_secret(token)
+        os.environ["KAGGLE_API_TOKEN"] = token
+
+        # Kaggle documents ~/.kaggle/access_token as an accepted location.
+        # Written as well as exported: belt and braces costs nothing here, and
+        # a failed auth an hour into a session costs a lot.
+        path = Path.home() / ".kaggle" / "access_token"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(token)
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass  # Windows development machines; irrelevant on Kaggle
+        return "token"
+
+    username = _read_secret("KAGGLE_USERNAME")
+    key = _read_secret("KAGGLE_KEY")
+    if username and key:
+        remember_secret(key)
+        os.environ["KAGGLE_USERNAME"] = username
+        os.environ["KAGGLE_KEY"] = key
+        path = Path.home() / ".kaggle" / "kaggle.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"username": username, "key": key}))
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+        return "legacy"
+
+    return None
 
 
 # --------------------------------------------------------------------------

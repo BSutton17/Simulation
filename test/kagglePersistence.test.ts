@@ -60,7 +60,40 @@ test("checkpoints survive losing the Kaggle session", () => {
   assert.match(output, /CMA-ES state preserved/);
   assert.match(output, /identity preserved: promote/);
   assert.match(output, /a stale checkpoint cannot overwrite newer work/);
+
+  // Kaggle now issues a single API token instead of a username/key pair.
+  assert.match(output, /KAGGLE_API_TOKEN is the preferred credential/);
+  assert.match(output, /no legacy username\/key was required/);
+  assert.match(output, /a push succeeds on token auth alone/);
+  assert.match(output, /a pull succeeds on token auth alone/);
+  assert.match(output, /the token is redacted from the error/);
+  assert.match(output, /the token is absent from every published file/);
+
   assert.match(output, /0 failed/);
+});
+
+test("the token never reaches source, logs or published files", () => {
+  // Belt and braces around the Python test: whatever that proves at runtime,
+  // the repository itself must contain no credential and no path that would
+  // write one into notebook output.
+  const store = readFileSync("kaggle/checkpoint_store.py", "utf8");
+
+  assert.match(store, /KAGGLE_API_TOKEN/, "the current token mechanism should be supported");
+  assert.match(store, /def redact/, "CLI output should be redacted before it can be logged");
+
+  // Credential files belong in the home directory, never in the notebook's
+  // output directory, which Kaggle publishes.
+  assert.ok(
+    !/kaggle\/working[^\n]*access_token|kaggle\/working[^\n]*kaggle\.json/.test(store),
+    "a credential file is being written into the published working directory",
+  );
+
+  // The token must never be printed. `configure_credentials` returns a mode
+  // name for logging precisely so the value itself has no reason to be.
+  assert.ok(
+    !/print\([^)]*\btoken\b[^)]*\)/.test(store.replace(/#.*$/gm, "")),
+    "something prints a variable named token",
+  );
 });
 
 test("no Kaggle credential is committed to the repository", () => {

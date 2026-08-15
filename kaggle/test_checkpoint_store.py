@@ -321,6 +321,45 @@ def main():
                 shutil.move(moved, home_token)
             os.environ["KAGGLE_USERNAME"], os.environ["KAGGLE_KEY"] = saved_user, saved_key
 
+        print("\nPULL SEMANTICS — recovery and no-op are different things")
+        # pull_latest returns False for two unrelated reasons: it could not
+        # recover, and it did not need to. Treating both as failure made the
+        # real Kaggle verification report PERSISTENCE FAILED on a system that
+        # was working — a leftover file from an earlier run was enough, because
+        # Kaggle's Files-only persistence keeps /kaggle/working across sessions.
+        # Both halves are pinned here so neither can collapse into the other.
+        semantics = store.KaggleDatasetStore(
+            "testuser/elementals-pull-semantics", workdir=str(workspace / "sem-work")
+        )
+        semantics.create(title="pull semantics")
+        seed_file = workspace / "sem" / "seed.json"
+        seed_file.parent.mkdir(parents=True, exist_ok=True)
+        seed_file.write_text(json.dumps(make_checkpoint(completed=6)), encoding="utf-8")
+        store.push_if_newer(semantics, seed_file, "seed")
+
+        fresh = workspace / "sem" / "fresh" / "checkpoint.json"
+        ok, message = store.pull_latest(semantics, fresh)
+        check("a clean location recovers the checkpoint", ok, message)
+        check("the recovered file is on disk", fresh.exists())
+        check("the recovered content is right",
+              fresh.exists() and json.loads(fresh.read_text())["completedGenerations"] == 6)
+
+        ok_again, message_again = store.pull_latest(semantics, fresh)
+        check("an already-current location reports a no-op",
+              not ok_again and "already at" in message_again, message_again)
+        check("a no-op is distinguishable from a recovery failure",
+              "already at" in message_again and "no checkpoint" not in message_again)
+
+        # Behind is not the same as current: a genuinely older local copy must
+        # still be replaced, or a resumed session would keep stale state.
+        behind = workspace / "sem" / "behind" / "checkpoint.json"
+        behind.parent.mkdir(parents=True, exist_ok=True)
+        behind.write_text(json.dumps(make_checkpoint(completed=2)), encoding="utf-8")
+        ok_behind, message_behind = store.pull_latest(semantics, behind)
+        check("an out-of-date location is brought forward", ok_behind, message_behind)
+        check("it was brought to the stored generation",
+              json.loads(behind.read_text())["completedGenerations"] == 6)
+
         print("\nLAUNCHER MIRROR — publishing while the search runs")
         # The production launcher watches the checkpoint file in a thread and
         # publishes when it advances. Pushing only at the end would protect

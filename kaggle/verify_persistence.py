@@ -18,6 +18,7 @@ out which it is from what already exists in the dataset.
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -145,9 +146,31 @@ def main():
     check("checkpoint version preserved", restored.get("version") == "v2")
 
     # The resume path the real run uses.
-    target = WORK / "verify" / "resume" / "checkpoint.json"
+    #
+    # Deliberately wiped first. `pull_latest` is idempotent: when the local copy
+    # is already current it declines and says so, which is correct behaviour and
+    # NOT a recovery failure. An earlier version of this script asserted only on
+    # the boolean, so a leftover file from a previous run — Kaggle's Files-only
+    # persistence keeps /kaggle/working across sessions — made a working system
+    # report PERSISTENCE FAILED.
+    resume_dir = WORK / "verify" / "resume"
+    if resume_dir.exists():
+        shutil.rmtree(resume_dir)
+    target = resume_dir / "checkpoint.json"
+
     ok, message = store.pull_latest(backend, target)
-    check("pull_latest recovers it", ok, message)
+    check("pull_latest recovers into a clean location", ok, message)
+    check("the recovered file exists", target.exists())
+    if target.exists():
+        check("the recovered file matches what was uploaded",
+              json.loads(target.read_text()) == PAYLOAD)
+
+    # And the other half of the contract: asked again, it must decline rather
+    # than re-download. Both behaviours are now pinned, so neither can regress
+    # into the other.
+    ok_again, message_again = store.pull_latest(backend, target)
+    check("a second pull is a no-op, not a failure",
+          not ok_again and "already at" in message_again, message_again)
 
     print("\n" + "=" * 70)
     if all(checks):

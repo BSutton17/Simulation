@@ -24,7 +24,9 @@ import shutil
 import stat
 import subprocess
 import sys
+import contextlib
 import tempfile
+import types
 import time
 from pathlib import Path
 
@@ -41,6 +43,79 @@ def check(label, condition, detail=""):
     (PASSED if condition else FAILED).append(label)
     print(f"  [{'PASS' if condition else 'FAIL'}] {label}{('  — ' + detail) if detail else ''}")
     return bool(condition)
+
+
+class _FakeUserSecretsClient:
+    """Stands in for Kaggle's secret store, returning only what a test set."""
+
+    _secrets = {}
+
+    def get_secret(self, name):
+        if name not in self._secrets:
+            # What the real client does for a secret that is not attached.
+            raise RuntimeError(f"secret {name} is not attached to this notebook")
+        return self._secrets[name]
+
+
+@contextlib.contextmanager
+def secret_store(**secrets):
+    """
+    Runs a block with Kaggle's secret store replaced by a controlled one.
+
+    Credential lookup checks the environment and then Kaggle's secret store, so
+    a scenario that only clears environment variables is still at the mercy of
+    what the machine really has. Off Kaggle `import kaggle_secrets` fails and
+    the lookup returns nothing, which made the legacy-fallback scenario pass
+    locally for the wrong reason. On Kaggle the store is live and handed back
+    the real attached KAGGLE_API_TOKEN, so the fallback was never reached — the
+    single failure in a committed notebook run.
+
+    Controlling the store fixes both: these scenarios now mean the same thing
+    everywhere, and the secret-store path is genuinely exercised instead of
+    being skipped because an import happened to fail.
+
+    Environment variables and credential files are cleared for the duration,
+    since both take part in the lookup and either would mask the store.
+    """
+    module = types.ModuleType("kaggle_secrets")
+    module.UserSecretsClient = type(
+        "UserSecretsClient", (_FakeUserSecretsClient,), {"_secrets": dict(secrets)}
+    )
+
+    previous_module = sys.modules.get("kaggle_secrets")
+    sys.modules["kaggle_secrets"] = module
+
+    managed = ("KAGGLE_API_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY")
+    previous_env = {name: os.environ.pop(name, None) for name in managed}
+
+    home = Path.home() / ".kaggle"
+    home.mkdir(parents=True, exist_ok=True)
+    stashed = {}
+    for name in ("access_token", "kaggle.json"):
+        path = home / name
+        if path.exists():
+            backup = home / f"{name}.scenariobak"
+            shutil.move(path, backup)
+            stashed[path] = backup
+
+    try:
+        yield
+    finally:
+        for name in ("access_token", "kaggle.json"):
+            path = home / name
+            if path.exists():
+                path.unlink()
+        for path, backup in stashed.items():
+            shutil.move(backup, path)
+        if previous_module is None:
+            sys.modules.pop("kaggle_secrets", None)
+        else:
+            sys.modules["kaggle_secrets"] = previous_module
+        for name, value in previous_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def make_checkpoint(generations=20, completed=3, stage="search", seed=20260813, promote=1):
@@ -296,19 +371,24 @@ def main():
             if saved_legacy[1]:
                 os.environ["KAGGLE_KEY"] = saved_legacy[1]
 
-        print("\nAUTHENTICATION — legacy fallback still works")
-        os.environ["KAGGLE_USERNAME"], os.environ["KAGGLE_KEY"] = "testuser", "legacykey12345678"
-        mode = store.configure_credentials()
-        check("legacy pair is used when no token is present", mode == "legacy", f"mode={mode}")
+        print("\nAUTHENTICATION — legacy fallback, nothing else attached")
+        with secret_store(KAGGLE_USERNAME="testuser", KAGGLE_KEY="legacykey12345678"):
+            mode = store.configure_credentials()
+            check("legacy pair is used when no token is attached", mode == "legacy", f"mode={mode}")
+            check("the legacy credential file is written",
+                  (Path.home() / ".kaggle" / "kaggle.json").exists())
 
-        print("\nCREDENTIALS")
-        saved_user, saved_key = os.environ.pop("KAGGLE_USERNAME"), os.environ.pop("KAGGLE_KEY")
-        home_token = Path.home() / ".kaggle" / "kaggle.json"
-        moved = None
-        if home_token.exists():
-            moved = home_token.with_suffix(".json.testbak")
-            shutil.move(home_token, moved)
-        try:
+        print("\nAUTHENTICATION — a token in the secret store is preferred")
+        # The environment is empty here, so this can only come from the store.
+        # Off Kaggle that import fails and the path was never exercised at all.
+        with secret_store(KAGGLE_API_TOKEN="kgl_from_secret_store_1234567890"):
+            mode = store.configure_credentials()
+            check("a token in the secret store alone is enough", mode == "token", f"mode={mode}")
+
+        print("\nAUTHENTICATION — nothing attached at all")
+        with secret_store():
+            mode = store.configure_credentials()
+            check("no credential is reported when none exists", mode is None, f"mode={mode}")
             failed = False
             try:
                 backend.pull(session2 / "noauth.json")
@@ -316,10 +396,9 @@ def main():
                 failed = True
             ok, _ = (False, "") if failed else store.pull_latest(backend, session2 / "noauth.json")
             check("missing credentials fail loudly rather than silently", failed or not ok)
-        finally:
-            if moved:
-                shutil.move(moved, home_token)
-            os.environ["KAGGLE_USERNAME"], os.environ["KAGGLE_KEY"] = saved_user, saved_key
+
+        # Restore working credentials for anything after this point.
+        os.environ["KAGGLE_USERNAME"], os.environ["KAGGLE_KEY"] = "testuser", "testkey"
 
         print("\nPULL SEMANTICS — recovery and no-op are different things")
         # pull_latest returns False for two unrelated reasons: it could not

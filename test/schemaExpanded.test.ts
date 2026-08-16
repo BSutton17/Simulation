@@ -11,8 +11,9 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  *
  * v1 searched 20 passive and system dials and no ability parameters at all.
  * v2 searches abilities only: damage, cooldown and cost for attacks; duration,
- * cost and cooldown for utilities; cooldown and cost for ultimates. Passives,
- * survivability and crit are all excluded by instruction.
+ * cost and cooldown for utilities; cooldown and cost for ultimates. 181
+ * dimensions. v1's twenty passive and system dials are held still, so anything
+ * the search finds is attributable to the abilities.
  */
 
 const v1 = buildSchema({ scope: "curated" });
@@ -27,16 +28,14 @@ test("v1 is preserved exactly, so the completed experiment stays reproducible", 
 });
 
 test("v2 searches abilities and nothing else", () => {
-  // Everything that is not an ability is excluded by instruction. v1 already
-  // searched the passives; this experiment asks a different question — what do
-  // the abilities want to be, with the rest of the game held still.
+  // v1's passives and global levers are held still here, so anything the search
+  // finds is attributable to the abilities rather than to a passive moving
+  // underneath them. Those twenty are a separate experiment for later.
   const nonAbility = searchable(v2).filter((x) => !x.id.startsWith("ability."));
   assert.deepEqual(nonAbility.map((x) => x.id), [], "v2 should contain only ability dials");
 
-  // Named explicitly so an accidental re-addition fails loudly. The v1 result
-  // gives a reason to keep survivability out in particular: shield cost went to
-  // its floor and repair amount to its ceiling together, which compresses FFA
-  // placement spread — and placement is 85% of the objective's weight.
+  // Named explicitly so an accidental re-addition fails loudly rather than
+  // quietly changing what the experiment measures.
   for (const id of ["castle.repairCost", "castle.repairAmount", "shield.cost",
                     "combat.baseCritChance", "passive.nature.0.pct", "passive.dark.0.chance"]) {
     assert.ok(!searchable(v2).some((x) => x.id === id), `${id} should not be searched in v2`);

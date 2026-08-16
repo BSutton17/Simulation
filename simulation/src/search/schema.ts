@@ -309,10 +309,11 @@ export function buildSchema(options: SchemaOptions | number = {}): BalanceSchema
     .toString(16)
     .padStart(8, "0");
 
-  // The expanded scope is ability dials ONLY. Passives, survivability and crit
-  // are all excluded by explicit instruction: v1 already searched the passives,
-  // and this experiment asks a different question — what do the abilities
-  // themselves want to be, with everything around them held still.
+  // The expanded scope is ability dials ONLY: damage/cooldown/cost per attack,
+  // duration/cost/cooldown per utility, cooldown/cost per ultimate. 181
+  // dimensions. v1's passives and global levers are searched separately and
+  // are deliberately held still here, so any movement is attributable to the
+  // abilities themselves.
   const selected = scope === "expanded" ? abilityDials(catalog) : [...CURATED];
 
   const parameters: SchemaParameter[] = [];

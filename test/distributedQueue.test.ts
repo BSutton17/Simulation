@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { Cmaes, buildSchema, makeCandidate, baseVector, vectorToParameters,
   type Candidate, type CandidateEvaluation } from "../simulation/src/search/index.js";
@@ -293,4 +294,93 @@ test("the status line reports what an operator needs", () => {
   assert.match(line, /14\/19/);
   assert.match(line, /6 workers/);
   assert.match(line, /left/);
+});
+
+/**
+ * How many worker notebooks are running is an operational choice, not part of
+ * the experiment. The coordinator waits for its outstanding jobs and is
+ * indifferent to who does them — including nobody, for a while.
+ */
+test("the coordinator is indifferent to how many workers exist", async () => {
+  for (const workerCount of [0, 1, 2, 5, 6, 12]) {
+    const queue = new FakeQueue();
+    // activeWorkers only ever reaches the log line; if it reached the control
+    // flow, a count of zero would break the run rather than pause it.
+    queue.activeWorkers = async () => workerCount;
+
+    const cma = strategy();
+    const { candidates } = population(cma, 0);
+    const evaluateGeneration = distributedEvaluator({
+      client: queue as never, experimentId: "exp", pollMs: 0,
+    });
+
+    // Answer everything up front, so completion is the only thing gating.
+    await queue.publishJobs(candidates.map((c, index) => ({
+      experimentId: "exp", generationNumber: 0, candidateIndex: index,
+      candidateId: c.id, candidateHash: c.hash, tier: "screen" as const, parameters: c.parameters,
+    })));
+    for (;;) {
+      const job = await queue.claimJob("exp", 0, "w");
+      if (!job) break;
+      await queue.submitResult(job, "w", {
+        fitness: { searchObjective: 0.5 }, failure: null, durationMs: 1, matches: 1,
+      });
+    }
+
+    const ordered = await evaluateGeneration(candidates, "screen");
+    assert.equal(ordered.length, candidates.length,
+      `reported ${workerCount} workers and the generation did not complete`);
+  }
+});
+
+test("a worker joining mid-generation is picked up", async () => {
+  // Workers register whenever their notebook happens to start. A generation
+  // already dispatched must still finish, with the late arrival doing its
+  // share rather than being locked out.
+  const queue = new FakeQueue();
+  const cma = strategy();
+  const { candidates } = population(cma, 0);
+  const evaluateGeneration = distributedEvaluator({
+    client: queue as never, experimentId: "exp", pollMs: 0,
+  });
+
+  await queue.publishJobs(candidates.map((c, index) => ({
+    experimentId: "exp", generationNumber: 0, candidateIndex: index,
+    candidateId: c.id, candidateHash: c.hash, tier: "screen" as const, parameters: c.parameters,
+  })));
+
+  // One worker takes the first two, then stalls.
+  for (let i = 0; i < 2; i++) {
+    const job = (await queue.claimJob("exp", 0, "early"))!;
+    await queue.submitResult(job, "early", {
+      fitness: { searchObjective: 0.4 }, failure: null, durationMs: 1, matches: 1,
+    });
+  }
+
+  // A second notebook starts now and finishes the rest.
+  for (;;) {
+    const job = await queue.claimJob("exp", 0, "late-joiner");
+    if (!job) break;
+    await queue.submitResult(job, "late-joiner", {
+      fitness: { searchObjective: 0.6 }, failure: null, durationMs: 1, matches: 1,
+    });
+  }
+
+  const ordered = await evaluateGeneration(candidates, "screen");
+  assert.equal(ordered.length, candidates.length);
+  assert.deepEqual(ordered.map((e) => e.candidate.hash), candidates.map((c) => c.hash));
+});
+
+test("no worker count is hard-coded into the coordinator's control flow", () => {
+  // Asserted against the source: the number of notebooks is operational, and a
+  // coordinator that waited for a quorum would stall whenever Kaggle gave us
+  // one fewer session than expected.
+  const source = readFileSync("simulation/src/distributed/coordinator.ts", "utf8");
+  const waitLoop = source.slice(source.indexOf("for (;;)"), source.indexOf("const results ="));
+  assert.match(waitLoop, /progress\.complete >= candidates\.length/,
+    "completion should be the only thing that ends the wait");
+  assert.ok(
+    !/workers\s*(===|!==|>=|<=|>|<)\s*\d/.test(waitLoop),
+    "the wait loop compares a worker count against a number",
+  );
 });

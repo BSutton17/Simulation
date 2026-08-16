@@ -17,6 +17,49 @@ import type { ExperimentIdentity, JobRecord, ResultRecord } from "./protocol.js"
  * uses that key, and it never goes near a worker notebook.
  */
 
+/**
+ * A transport the Realtime client is given and never uses.
+ *
+ * `createClient` builds a RealtimeClient eagerly in its constructor — there is
+ * no option to skip it — and that constructor resolves a WebSocket:
+ *
+ *     result.transport = options?.transport ?? WebSocketFactory.getWebSocketConstructor()
+ *
+ * On Node 22+ the factory finds the global WebSocket and everything works. On
+ * Node 20 there is no global WebSocket and it throws "Node.js detected but
+ * native WebSocket not found", before a single query can run. That is why this
+ * passed on a developer machine and failed on Kaggle, which runs Node 20.19.
+ *
+ * Supplying `transport` means the factory is never consulted. Nothing ever
+ * constructs it, because this queue only uses PostgREST — `.from()` for tables
+ * and `.rpc()` for the claim and submit functions — and never opens a channel
+ * or subscribes to anything. If some future code did try to use Realtime, this
+ * throws rather than silently connecting to nothing.
+ *
+ * Preferred over the alternatives: adding a `ws` dependency would pull a
+ * package in purely to satisfy a code path we do not exercise, and pinning an
+ * older supabase-js would trade a live bug for an unmaintained one.
+ */
+class UnusedRealtimeTransport {
+  constructor() {
+    throw new Error(
+      "Realtime is not available in this client: the distributed queue uses " +
+        "PostgREST only. Supply a real WebSocket transport if you need channels.",
+    );
+  }
+}
+
+// Derived from createClient's own signature rather than imported from
+// @supabase/realtime-js. That package is a transitive dependency we do not
+// declare, and importing it directly would break the moment supabase-js
+// restructured its internals — which the boundary test correctly refuses to
+// allow.
+type TransportOption = NonNullable<
+  NonNullable<Parameters<typeof createClient>[2]>["realtime"]
+>["transport"];
+
+const UNUSED_TRANSPORT = UnusedRealtimeTransport as unknown as TransportOption;
+
 export type ClientRole = "coordinator" | "worker";
 
 export interface ClientOptions {
@@ -69,6 +112,7 @@ export class QueueClient {
     this.role = options.role;
     this.db = createClient(fallback.url, fallback.key, {
       auth: { persistSession: false, autoRefreshToken: false },
+      realtime: { transport: UNUSED_TRANSPORT },
     });
   }
 

@@ -123,6 +123,26 @@ export interface SearchConfig {
   /** Ignore any checkpoint on disk and start over. */
   restart?: boolean;
   /**
+   * Evaluates a whole generation, for distributing the work off this machine.
+   *
+   * Omit it and candidates are evaluated here, one at a time, as always. Supply
+   * it and they can go anywhere — a worker pool, other Kaggle notebooks, a job
+   * queue — because evaluation is the only expensive part and it is
+   * embarrassingly parallel.
+   *
+   * The contract is the whole reason this is safe: results MUST come back in
+   * `candidates` order. `cma.tell` is handed `screened.map(rankOf)`, so the
+   * order of that array IS the correspondence between candidate and score.
+   * Return them shuffled and the strategy learns from a permuted population
+   * without anything erroring. Evaluation is deterministic given
+   * (parameters, tier, pool), so an ordered result set makes the distributed
+   * path mathematically identical to the local one rather than merely similar.
+   */
+  evaluateGeneration?: (
+    candidates: Candidate[],
+    tier: EvaluationTier,
+  ) => Promise<CandidateEvaluation[]>;
+  /**
    * Wall-clock budget in milliseconds. When it runs out the search stops at the
    * next generation boundary and returns normally.
    *
@@ -546,12 +566,35 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
     );
     candidateCount += candidates.length;
 
-    // Screen everything cheaply.
+    // Screen everything cheaply, here or elsewhere.
     const screened: CandidateEvaluation[] = [];
-    for (const candidate of candidates) {
-      const e = await evaluateCandidate(candidate, "screen", cache, config, fitnessConfig);
-      record(e);
-      screened.push(e);
+    if (config.evaluateGeneration) {
+      const results = await config.evaluateGeneration(candidates, "screen");
+      if (results.length !== candidates.length) {
+        throw new Error(
+          `evaluateGeneration returned ${results.length} results for ${candidates.length} candidates`,
+        );
+      }
+      // Order is the correspondence between candidate and score, so it is
+      // checked rather than trusted. A permuted population would train the
+      // strategy on mismatched pairs and never raise.
+      results.forEach((e, i) => {
+        if (e.candidate.hash !== candidates[i]!.hash) {
+          throw new Error(
+            `evaluateGeneration returned results out of order at index ${i}: ` +
+              `expected ${candidates[i]!.id}, got ${e.candidate.id}`,
+          );
+        }
+        record(e);
+        cache.set(e);
+        screened.push(e);
+      });
+    } else {
+      for (const candidate of candidates) {
+        const e = await evaluateCandidate(candidate, "screen", cache, config, fitnessConfig);
+        record(e);
+        screened.push(e);
+      }
     }
 
     // CMA-ES learns from the screening scores: they are what every candidate

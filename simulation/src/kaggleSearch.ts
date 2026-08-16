@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
 import { join } from "node:path";
-import { runSearch, fitnessOf, type SearchResult } from "./search/index.js";
+import { runSearch, fitnessOf, buildSchema, searchable, type SearchResult, type SearchScope } from "./search/index.js";
 import { WEIGHT_PRESETS, fitnessText } from "./fitness/index.js";
 import { defaultWorkerCount } from "./evaluation/index.js";
 
@@ -35,6 +35,8 @@ interface Args {
   hours: number | undefined;
   out: string;
   restart: boolean;
+  /** Which slice of the engine the optimizer may move. */
+  scope: SearchScope;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -67,11 +69,20 @@ function parseArgs(argv: string[]): Args {
     validate: num("validate", 1),
     hours: optional("hours"),
     out: get("out") ?? "runs/kaggle",
+    // "curated" is the completed v1 experiment: 20 passive/system dials.
+    // "expanded" adds each kingdom's most-cast attack, 52 dimensions in total.
+    // The schema version differs per scope, so a v1 checkpoint can never
+    // silently resume a v2 run.
+    scope: (get("scope") ?? "curated") as SearchScope,
     restart: argv.includes("--restart"),
   };
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.scope !== "curated" && args.scope !== "expanded") {
+  throw new Error(`--scope expects "curated" or "expanded", got "${args.scope}"`);
+}
+const schema = buildSchema({ scope: args.scope });
 mkdirSync(args.out, { recursive: true });
 
 const checkpointPath = join(args.out, "checkpoint.json");
@@ -101,6 +112,7 @@ log(`  generations    ${args.generations}`);
 log(`  population     ${args.population ?? "auto (CMA-ES default)"}`);
 log(`  sigma          ${args.sigma}`);
 log(`  seed           ${args.seed}`);
+log(`  scope          ${args.scope} (schema ${schema.version}, ${searchable(schema).length} dimensions)`);
 log(`  budget         ${args.hours !== undefined ? `${args.hours}h` : "none"}`);
 log(`  output         ${args.out}`);
 log(`  checkpoint     ${checkpointPath}${args.restart ? "  (RESTART — ignoring any existing)" : ""}`);
@@ -109,6 +121,7 @@ log("");
 let result: SearchResult;
 try {
   result = await runSearch({
+    schema,
     seed: args.seed,
     generations: args.generations,
     populationSize: args.population,

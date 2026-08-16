@@ -1,4 +1,6 @@
 import { listParameters } from "../../../src/engine/parameterCatalog.js";
+import { KINGDOM_IDS } from "../../../src/data/kingdoms.js";
+import { KINGDOM_ABILITIES } from "../../../src/data/kingdomAbilities.js";
 import type { ParameterSet } from "../../../src/engine/parameters.js";
 import { hashSeed } from "../rng.js";
 
@@ -63,7 +65,7 @@ export interface BalanceSchema {
  *    dimensionality for changes that are harder to reason about and easy to add
  *    once the search is shown to work.
  */
-const CURATED: Omit<SchemaParameter, "base" | "min" | "max">[] = [
+const PASSIVE_DIALS: Omit<SchemaParameter, "base" | "min" | "max">[] = [
   // One always-on power scalar per kingdom.
   p("passive.water.1.pct", "kingdomPower", "Water resistance passive"),
   p("passive.fire.0.pct", "kingdomPower", "Fire's headline passive multiplier"),
@@ -82,12 +84,28 @@ const CURATED: Omit<SchemaParameter, "base" | "min" | "max">[] = [
   p("passive.kitsune.0.perDamage", "kingdomPower", "Kitsune memory gain per damage"),
   p("passive.dark.0.chance", "kingdomPower", "Dark passive proc chance"),
 
-  // Global levers on how punishing the game is.
+];
+
+/**
+ * Global levers on how punishing the game is.
+ *
+ * Part of the v1 search and kept only there. They are excluded from the
+ * expanded scope by explicit instruction, and the v1 result gives a reason to
+ * take that seriously: the optimizer drove shield cost to its floor and repair
+ * amount to its ceiling simultaneously, which makes elimination rarer and
+ * compresses FFA placement spread. Since 85% of the objective's weight is
+ * placement-based, that may have been the score improving without the game
+ * becoming fairer.
+ */
+const SYSTEM_DIALS: Omit<SchemaParameter, "base" | "min" | "max">[] = [
   p("castle.repairCost", "survivability", "Cost of a castle repair", "integer"),
   p("castle.repairAmount", "survivability", "HP restored per repair", "integer"),
   p("shield.cost", "survivability", "Cost of a shield", "integer"),
   p("combat.baseCritChance", "combat", "Baseline critical-hit chance"),
 ];
+
+/** The v1 search space, unchanged, so that experiment stays reproducible. */
+const CURATED = [...PASSIVE_DIALS, ...SYSTEM_DIALS];
 
 /**
  * Parameters deliberately withheld from the optimizer.
@@ -177,7 +195,113 @@ export function boundsFor(id: string, base: number, spread = DEFAULT_SPREAD): { 
 
 /** Builds the schema from the live catalog, so bases can never drift from the
  *  engine's actual values. */
-export function buildSchema(spread = DEFAULT_SPREAD): BalanceSchema {
+/**
+ * How much of the engine's tunable surface the optimizer may move.
+ *
+ * "curated" is the v1 search: 16 passive dials plus four global levers. It is
+ * kept verbatim so the completed v1 experiment stays reproducible.
+ *
+ * "expanded" adds each kingdom's most-cast attack — its damage and its
+ * cooldown. That is the largest expansion the compute budget actually supports,
+ * and the reasoning is arithmetic rather than taste. CMA-ES needs roughly 10n
+ * evaluations to make meaningful progress. At Kaggle's measured 5.41 match/s,
+ * a generation costs `lambda * 1656 + 5760` matches, so eight seven-hour
+ * sessions buy about 500 evaluations no matter what n is:
+ *
+ *     dims   evals/dim   verdict
+ *       20        24.0   comfortable
+ *       52         9.5   marginal, workable
+ *      100         5.1   under-resourced
+ *      600         0.9   would need 260-2600 generations, i.e. months
+ *
+ * Handing CMA-ES all 600 ability parameters would not be a bigger search; it
+ * would be a search that never gets past its initial covariance estimate. The
+ * ceiling is set by evaluations, and evaluations are set by simulation cost.
+ */
+export type SearchScope = "curated" | "expanded";
+
+/** Version per scope, so a v1 checkpoint can never resume a v2 run: the schema
+ *  version is part of the checkpoint identity and the candidate hash. */
+const SCOPE_VERSION: Record<SearchScope, string> = { curated: "v1", expanded: "v2" };
+
+/**
+ * Abilities the AI never casts, measured from telemetry (68/80 coverage).
+ *
+ * Tuning an ability nobody uses is a dimension that cannot move the objective —
+ * it spends evaluations to learn that its own axis is flat. Excluded until the
+ * controller reaches them.
+ */
+const NEVER_CAST = new Set([
+  "birdsEyeView", "neverEndingNightmare", "unlimitedRage", "yinAndYang",
+  "blazingDetermination", "creepyCrawlers", "flashBang", "bffs", "empathy",
+  "loveGalore", "orionsBeltAbility", "backToTheFuture",
+]);
+
+/**
+ * Which numeric knobs each kind of ability contributes.
+ *
+ * Chosen by the designer, and the split reflects what each kind is for. An
+ * attack is defined by how hard it hits and how often; a utility by how long
+ * its effect lasts and what it costs to keep up; an ultimate by its price and
+ * its rhythm, since its payload is usually the point of the kingdom and not a
+ * dial to be shaved.
+ *
+ * Damage is the only continuous value here. Costs, cooldowns and durations are
+ * integers in the engine and are searched as integers, so a candidate never
+ * describes a game with a fractional tick.
+ */
+const ABILITY_DIALS: Record<string, { suffix: string; type: ParameterType; label: string }[]> = {
+  attack: [
+    { suffix: "effects.0.amount", type: "continuous", label: "damage" },
+    { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
+    { suffix: "cost", type: "integer", label: "cost" },
+  ],
+  utility: [
+    { suffix: "effects.0.durationTicks", type: "integer", label: "duration" },
+    { suffix: "cost", type: "integer", label: "cost" },
+    { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
+  ],
+  ultimate: [
+    { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
+    { suffix: "cost", type: "integer", label: "cost" },
+  ],
+};
+
+/**
+ * Every castable ability's dials, derived from the live catalog.
+ *
+ * Two things are skipped, both because they would be dimensions that cannot
+ * move: an ability the AI never casts, and a parameter whose base is zero —
+ * a percentage bound around zero spans nothing. Electricity's lightningBarrage
+ * is the live example, with damage 0 and cooldown 0.
+ */
+function abilityDials(catalog: Map<string, number>): Omit<SchemaParameter, "base" | "min" | "max">[] {
+  const out: Omit<SchemaParameter, "base" | "min" | "max">[] = [];
+  for (const kingdomId of KINGDOM_IDS) {
+    for (const ability of KINGDOM_ABILITIES[kingdomId]) {
+      if (ability.kind === "passive" || NEVER_CAST.has(ability.id)) continue;
+      for (const dial of ABILITY_DIALS[ability.kind] ?? []) {
+        const id = `ability.${ability.id}.${dial.suffix}`;
+        const base = catalog.get(id);
+        if (base === undefined || base === 0) continue;
+        out.push(p(id, `ability${ability.kind[0]!.toUpperCase()}${ability.kind.slice(1)}`,
+          `${kingdomId}: ${ability.id} ${dial.label}`, dial.type));
+      }
+    }
+  }
+  return out;
+}
+
+export interface SchemaOptions {
+  scope?: SearchScope;
+  spread?: number;
+}
+
+export function buildSchema(options: SchemaOptions | number = {}): BalanceSchema {
+  // A number keeps the original `buildSchema(spread)` signature working.
+  const { scope = "curated", spread = DEFAULT_SPREAD } =
+    typeof options === "number" ? { spread: options, scope: "curated" as SearchScope } : options;
+
   const catalog = new Map(listParameters().map((x) => [x.id, x.base]));
   const catalogHash = hashSeed(
     [...catalog.entries()].sort().map(([k, v]) => `${k}=${v}`).join(";"),
@@ -185,8 +309,14 @@ export function buildSchema(spread = DEFAULT_SPREAD): BalanceSchema {
     .toString(16)
     .padStart(8, "0");
 
+  // The expanded scope is ability dials ONLY. Passives, survivability and crit
+  // are all excluded by explicit instruction: v1 already searched the passives,
+  // and this experiment asks a different question — what do the abilities
+  // themselves want to be, with everything around them held still.
+  const selected = scope === "expanded" ? abilityDials(catalog) : [...CURATED];
+
   const parameters: SchemaParameter[] = [];
-  for (const entry of [...CURATED, ...LOCKED]) {
+  for (const entry of [...selected, ...LOCKED]) {
     const base = catalog.get(entry.id);
     if (base === undefined) {
       throw new Error(
@@ -199,7 +329,7 @@ export function buildSchema(spread = DEFAULT_SPREAD): BalanceSchema {
       : boundsFor(entry.id, base, widened?.spread ?? spread);
     parameters.push({ ...entry, base, min, max });
   }
-  return { version: SCHEMA_VERSION, catalogHash, parameters };
+  return { version: SCOPE_VERSION[scope], catalogHash, parameters };
 }
 
 /** Parameters the optimizer may actually move. */

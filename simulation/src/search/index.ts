@@ -17,6 +17,8 @@ export {
   vectorToParameters,
   describeSchema,
   SCHEMA_VERSION,
+  type SearchScope,
+  type SchemaOptions,
   type BalanceSchema,
   type SchemaParameter,
   type ParameterType,

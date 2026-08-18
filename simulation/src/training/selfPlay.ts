@@ -168,6 +168,7 @@ function hash(text: string): number {
 const emptyStats = (): ControllerStats => ({
   decisions: 0, casts: 0, invests: 0, citizens: 0, repairs: 0, shields: 0,
   retargets: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
+  actionSwitches: 0, distinctActions: 0, legalOffered: 0,
 });
 
 /**

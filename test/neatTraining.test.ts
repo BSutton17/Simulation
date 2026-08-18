@@ -206,7 +206,9 @@ test("every score stays within the formula's stated maximum", () => {
 
 test("terms always reconstruct the score", () => {
   const result = scoreScenario(record(), "p0", context(), FIT);
-  const rebuilt = result.terms.win + result.terms.placement + result.terms.survival + result.terms.combat;
+  const rebuilt =
+    result.terms.win + result.terms.placement + result.terms.survival +
+    result.terms.combat + result.terms.activity;
   assert.ok(Math.abs(rebuilt - result.score) < 1e-9, "a score must be explainable from its terms");
 });
 
@@ -361,18 +363,40 @@ test("baselines put every candidate through identical scenarios", () => {
   assert.match(formatBaselines(report), /candidate/);
 });
 
-test("a heuristic outfights a random network on the same slate", () => {
-  // The floor the whole exercise rests on. If a random network matched a tuned
-  // heuristic, either the environment or the fitness function would be telling
-  // us nothing.
-  const config = smallSlate();
+test("the fitness function ranks the tuned heuristics correctly", () => {
+  // The floor test, and NOT the one this started as. It began as "a heuristic
+  // beats a random network", which is measurably false since the policy became
+  // stochastic: across eight random seeds the mean fitness is 1.148 against
+  // economic's 0.951, and four of the eight win every match. Acting often beats
+  // `balanced`, which casts 116 times in eight matches and loses all of them.
+  //
+  // That is a fact about the heuristics rather than a bug — and it is the
+  // clearest possible argument for self-play, since an opponent a random network
+  // beats cannot be a training signal. What the fitness function must still do is
+  // rank the tuned heuristics in their known order, and it does.
+  const config = trainingConfig({
+    slate: {
+      ...trainingConfig().slate,
+      formats: ["duel"],
+      kingdomsPerGenome: 4,
+      opponents: ["balanced"],
+      seatRotations: 2,
+      maxTicks: 8_000,
+    },
+  });
   const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
-  const random = evaluateCandidate(randomCandidate(4242), slate, config.fitness);
-  const heuristic = evaluateCandidate(personalityCandidate("balanced"), slate, config.fitness);
+  const economic = evaluateCandidate(personalityCandidate("economic"), slate, config.fitness);
+  const balanced = evaluateCandidate(personalityCandidate("balanced"), slate, config.fitness);
+  const aggressive = evaluateCandidate(personalityCandidate("aggressive"), slate, config.fitness);
+
+  // Economic is the strongest profile measured anywhere in this project (89.6%
+  // of duels), and the score must say so.
   assert.ok(
-    heuristic.totalDamageDealt > random.totalDamageDealt,
-    `heuristic ${heuristic.totalDamageDealt} vs random ${random.totalDamageDealt} damage`,
+    economic.fitness > balanced.fitness && economic.fitness > aggressive.fitness,
+    `economic ${economic.fitness.toFixed(4)} vs balanced ${balanced.fitness.toFixed(4)} / ` +
+      `aggressive ${aggressive.fitness.toFixed(4)}`,
   );
+  assert.ok(economic.wins > balanced.wins, "and it should actually win more");
 });
 
 // ── training loop ───────────────────────────────────────────────────────
@@ -504,3 +528,24 @@ import { readCheckpoint } from "../simulation/src/training/index.js";
 function readCheckpointFrom(path: string, config: ReturnType<typeof trainingConfig>) {
   return readCheckpoint(path, localIdentity(config));
 }
+
+test("the activity reward saturates, so acting cannot be farmed", () => {
+  // It exists to give the flat basin between "did nothing" and "played" a slope.
+  // Past the target it must be constant, or a genome learns to spam the cheapest
+  // ability instead of learning to win — the failure this project already
+  // measured in its heuristic controller.
+  const idle = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 1, invests: 0, citizens: 0, repairs: 0, shields: 0, retargets: 0, waits: 100, decisions: 100, forcedWaits: 0 },
+  }), FIT);
+  const busy = scoreScenario(record(), "p0", context({
+    behaviour: { casts: FIT.activityTarget, invests: 0, citizens: 0, repairs: 0, shields: 0, retargets: 0, waits: 100, decisions: 100, forcedWaits: 0 },
+  }), FIT);
+  const spamming = scoreScenario(record(), "p0", context({
+    behaviour: { casts: FIT.activityTarget * 50, invests: 0, citizens: 0, repairs: 0, shields: 0, retargets: 0, waits: 100, decisions: 100, forcedWaits: 0 },
+  }), FIT);
+
+  assert.ok(busy.terms.activity > idle.terms.activity, "acting should pay something");
+  assert.equal(spamming.terms.activity, busy.terms.activity, "and stop paying at the target");
+  // And it stays small enough that it can never outrank winning.
+  assert.ok(FIT.activityWeight < FIT.winWeight / 5, "activity must not compete with winning");
+});

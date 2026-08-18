@@ -19,10 +19,11 @@ import type { ActionMask } from "./legality.js";
  * call. That split is what lets the decoder be tested exhaustively without a
  * match, and what keeps the number of modules touching the simulation at two.
  *
- * Deterministic throughout. Ties break toward the lower index rather than
- * randomly, because a stochastic policy would reintroduce exactly the variance
- * that the evaluation framework spent considerable effort removing — and
- * because a genome must replay identically on a given seed.
+ * Reproducible throughout. With `temperature: 0` the choice is a pure argmax and
+ * ties break toward the lower index. Above zero it samples the network's own
+ * preference ordering from the SEAT'S SEEDED STREAM, so a given seed still
+ * replays exactly — sampling adds variety within a match without adding variance
+ * between runs, which is the distinction the evaluation framework cares about.
  */
 
 export interface Decision {
@@ -53,25 +54,62 @@ export interface Decision {
 const WAIT_ACTION: PrimaryAction = { kind: "wait" };
 
 /**
- * Picks the highest-scoring LEGAL head.
+ * Picks a LEGAL head, by argmax or by sampling the network's preferences.
  *
  * Illegal heads are skipped rather than penalized, so a network that would have
  * chosen one simply acts on its next preference. Because WAIT is always legal,
  * this cannot fail.
  */
-export function decide(outputs: Float32Array, mask: ActionMask): Decision {
+export function decide(
+  outputs: Float32Array,
+  mask: ActionMask,
+  options: { temperature?: number; rng?: () => number } = {},
+): Decision {
   if (outputs.length !== ACTION_SIZE) {
     throw new Error(`outputs must be ${ACTION_SIZE}, got ${outputs.length}`);
   }
 
+  const temperature = options.temperature ?? 0;
+  const rng = options.rng;
   let bestIndex = WAIT;
-  let best = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < PRIMARY_ACTION_COUNT; i++) {
-    if (mask[i] !== 1) continue;
-    const value = outputs[i]!;
-    if (value > best) {
-      best = value;
-      bestIndex = i;
+  if (temperature > 0 && rng !== undefined) {
+    // Sample from the network's own preference ordering rather than taking only
+    // its top pick. A pure argmax over a slowly-changing observation returns the
+    // same head for thousands of ticks, which makes timing unlearnable; see
+    // `difficulty.ts` on temperature.
+    let total = 0;
+    let peak = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < PRIMARY_ACTION_COUNT; i++) {
+      if (mask[i] === 1 && outputs[i]! > peak) peak = outputs[i]!;
+    }
+    const weights: number[] = new Array(PRIMARY_ACTION_COUNT).fill(0);
+    for (let i = 0; i < PRIMARY_ACTION_COUNT; i++) {
+      if (mask[i] !== 1) continue;
+      // Shifted by the peak before exponentiating, so a large output cannot
+      // overflow into Infinity and make every probability NaN.
+      const w = Math.exp((outputs[i]! - peak) / temperature);
+      weights[i] = w;
+      total += w;
+    }
+    let roll = rng() * total;
+    bestIndex = WAIT;
+    for (let i = 0; i < PRIMARY_ACTION_COUNT; i++) {
+      if (mask[i] !== 1) continue;
+      roll -= weights[i]!;
+      if (roll <= 0) {
+        bestIndex = i;
+        break;
+      }
+    }
+  } else {
+    let best = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < PRIMARY_ACTION_COUNT; i++) {
+      if (mask[i] !== 1) continue;
+      const value = outputs[i]!;
+      if (value > best) {
+        best = value;
+        bestIndex = i;
+      }
     }
   }
 

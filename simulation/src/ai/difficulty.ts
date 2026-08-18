@@ -36,12 +36,32 @@ export interface DifficultyConfig {
    * values the seat was legitimately shown.
    */
   readonly observationBuckets: number;
+  /**
+   * Softmax temperature over the legal actions. 0 is a pure argmax.
+   *
+   * ⚠️ NOT a difficulty knob in disguise, and not a shaping reward — it is what
+   * makes "when to wait" LEARNABLE at all. Measured: with a pure argmax, genomes
+   * offered ~7 legal actions per decision used 2 of 14 and changed their choice
+   * under 1% of the time. A deterministic network reading a slowly-changing
+   * observation returns the same head for thousands of consecutive ticks, so
+   * evolution was being asked to learn timing through a mechanism that cannot
+   * represent it.
+   *
+   * Sampling restores the ability to vary. The network still decides — the
+   * softmax follows its own output ordering — but a second-place action is now
+   * reachable, so a genome can discover that acting sometimes beats waiting and
+   * selection can keep the discovery. Drawn from the seat's seeded stream, so
+   * replay is unaffected.
+   */
+  readonly temperature: number;
 }
 
 export const DIFFICULTY: Readonly<Record<Difficulty, DifficultyConfig>> = {
-  hard: { decisionPeriod: 5, secondBestRate: 0, observationBuckets: 0 },
-  medium: { decisionPeriod: 10, secondBestRate: 0.05, observationBuckets: 0 },
-  easy: { decisionPeriod: 20, secondBestRate: 0.15, observationBuckets: 5 },
+  // Even Hard samples. A fully deterministic bot repeats itself, which is both
+  // exploitable by a human and the exact pathology measured above.
+  hard: { decisionPeriod: 5, secondBestRate: 0, observationBuckets: 0, temperature: 0.4 },
+  medium: { decisionPeriod: 10, secondBestRate: 0.05, observationBuckets: 0, temperature: 0.6 },
+  easy: { decisionPeriod: 20, secondBestRate: 0.15, observationBuckets: 5, temperature: 0.9 },
 };
 
 /** The cadence the heuristic controller uses, and the reference for Hard. */

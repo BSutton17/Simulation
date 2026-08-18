@@ -300,7 +300,9 @@ function diagnoseCommand(): void {
     console.log(
       `     genome ${i}  cast ${(100 * p.casts).toFixed(1)}%  invest ${(100 * p.invests).toFixed(1)}%  ` +
         `economy ${(100 * p.economy).toFixed(1)}%  wait ${(100 * p.waits).toFixed(1)}%  ` +
-        `(forced ${(100 * p.forcedShare).toFixed(1)}%)`,
+        `(forced ${(100 * p.forcedShare).toFixed(1)}%)  ` +
+        `switch ${(100 * p.switchRate).toFixed(1)}%  distinct ${p.distinctActions}/14  ` +
+        `legal/dec ${p.legalPerDecision.toFixed(1)}`,
     );
   }
   console.log(

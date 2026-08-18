@@ -67,6 +67,7 @@ export interface FitnessTerms {
   placement: number;
   survival: number;
   combat: number;
+  activity: number;
   /** Multiplier applied by the guards (1 = untouched). */
   guard: number;
   guardReason: string | null;
@@ -98,6 +99,23 @@ export interface FitnessConfig {
   timeoutCap: number;
   /** Score for a match in which the genome never cast anything. */
   inactivityScore: number;
+  /**
+   * A small, SATURATING reward for acting at all.
+   *
+   * The inactivity guard is all-or-nothing: one cast passes it, zero fails. That
+   * leaves a wide flat basin between "did nothing" and "played", and evolution
+   * has no gradient across it. This gives the basin a slope.
+   *
+   * Saturating is the whole design. It pays up to `activityTarget` casts and not
+   * one point beyond, so it cannot be farmed by spamming the cheapest ability —
+   * which is exactly the failure mode a naive damage-or-actions reward produces,
+   * and which this project has already measured in its heuristic controller.
+   * Past the target the term is constant and winning is the only thing left to
+   * optimise, so the AI still decides for itself when waiting is right.
+   */
+  activityWeight: number;
+  /** Casts at which the activity reward is fully paid. */
+  activityTarget: number;
 }
 
 export const DEFAULT_FITNESS: FitnessConfig = {
@@ -107,11 +125,21 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   combatWeight: 0.15,
   timeoutCap: 0.25,
   inactivityScore: 0,
+  // Deliberately smaller than every other term: it exists to leave the
+  // do-nothing basin, not to compete with winning.
+  activityWeight: 0.08,
+  activityTarget: 20,
 };
 
 /** The largest score the formula can produce, for normalizing reports. */
 export function maxScore(config: FitnessConfig): number {
-  return config.winWeight + config.placementWeight + config.survivalWeight + config.combatWeight;
+  return (
+    config.winWeight +
+    config.placementWeight +
+    config.survivalWeight +
+    config.combatWeight +
+    config.activityWeight
+  );
 }
 
 /** Finishing position, 1 = winner. Mirrors `evaluation/jobs.ts:runJob`. */
@@ -191,11 +219,14 @@ export function scoreScenario(
     placement: config.placementWeight * normalizedPlacement,
     survival: config.survivalWeight * survivedFraction,
     combat: config.combatWeight * combatShare,
+    activity:
+      config.activityWeight *
+      Math.min(1, context.behaviour.casts / Math.max(1, config.activityTarget)),
     guard: 1,
     guardReason: null,
   };
 
-  let score = terms.win + terms.placement + terms.survival + terms.combat;
+  let score = terms.win + terms.placement + terms.survival + terms.combat + terms.activity;
 
   // Guards. Both describe strategies that score well while accomplishing
   // nothing, and both are reachable in this game.

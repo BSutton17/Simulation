@@ -37,6 +37,8 @@ export interface NetworkControllerOptions {
   readonly difficulty?: Difficulty;
   /** Overrides the difficulty's cadence. Mainly for tests. */
   readonly decisionPeriod?: number;
+  /** Overrides the difficulty's sampling temperature. 0 forces a pure argmax. */
+  readonly temperature?: number;
 }
 
 /** Per-match counters, for proving the pipeline actually did things. */
@@ -61,6 +63,21 @@ export interface ControllerStats {
   rejectedBy: Record<string, number>;
   /** Ticks on which the mask offered nothing but WAIT. */
   forcedWaits: number;
+  /**
+   * Decisions where the chosen head differed from the previous decision's.
+   *
+   * The difference between a policy and a constant. A deterministic argmax over
+   * an observation that changes slowly can return the SAME head for thousands of
+   * consecutive ticks — which is not "learning when to wait", it is a network
+   * that cannot express a change of mind. Low switching with a high legal-action
+   * count means evolution is being asked to learn timing through a mechanism
+   * that cannot represent it.
+   */
+  actionSwitches: number;
+  /** Distinct heads chosen across the match, out of 22. */
+  distinctActions: number;
+  /** Summed legal actions over all decisions, for the choice-per-decision rate. */
+  legalOffered: number;
 }
 
 export class NetworkController implements AIController {
@@ -69,6 +86,7 @@ export class NetworkController implements AIController {
   private readonly period: number;
   private readonly secondBestRate: number;
   private readonly buckets: number;
+  private readonly temperature: number;
 
   /** Buffers owned for the life of the controller — see observation.ts. */
   private readonly obs = new Float32Array(OBSERVATION_SIZE);
@@ -84,7 +102,12 @@ export class NetworkController implements AIController {
   readonly stats: ControllerStats = {
     decisions: 0, casts: 0, invests: 0, citizens: 0, repairs: 0,
     shields: 0, retargets: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
+    actionSwitches: 0, distinctActions: 0, legalOffered: 0,
   };
+
+  /** Diagnostics only: what was chosen last, and everything chosen so far. */
+  private previousAction = -1;
+  private readonly actionsSeen = new Set<number>();
 
   /** Records a rejection under a name that identifies the drift. */
   private reject(action: string, error: string | undefined): void {
@@ -100,6 +123,7 @@ export class NetworkController implements AIController {
     this.period = Math.max(1, options.decisionPeriod ?? config.decisionPeriod);
     this.secondBestRate = config.secondBestRate;
     this.buckets = config.observationBuckets;
+    this.temperature = options.temperature ?? config.temperature;
     // Same expression knowledge.ts uses, so slot indices agree.
     this.kit = abilitiesForKingdom(player.kingdomId).filter((a) => a.kind !== "passive");
     // Stagger seats so they do not all decide on the same ticks, matching the
@@ -130,12 +154,24 @@ export class NetworkController implements AIController {
     legalActions(knowledge, this.mask);
 
     if (onlyWaitIsLegal(this.mask)) this.stats.forcedWaits += 1;
+    for (let i = 0; i < PRIMARY_ACTION_COUNT; i++) {
+      if (this.mask[i] === 1) this.stats.legalOffered += 1;
+    }
 
-    let decision = decide(this.out, this.mask);
+    let decision = decide(this.out, this.mask, {
+      temperature: this.temperature,
+      rng: this.rng,
+    });
     if (this.secondBestRate > 0 && this.rng() < this.secondBestRate) {
       decision = this.secondBest(decision);
     }
     this.stats.decisions += 1;
+    if (this.previousAction >= 0 && decision.primaryIndex !== this.previousAction) {
+      this.stats.actionSwitches += 1;
+    }
+    this.previousAction = decision.primaryIndex;
+    this.actionsSeen.add(decision.primaryIndex);
+    this.stats.distinctActions = this.actionsSeen.size;
 
     this.apply(ctx, knowledge, decision);
   }
@@ -160,7 +196,7 @@ export class NetworkController implements AIController {
     this.altMask.set(this.mask);
     this.altMask[first.primaryIndex] = 0;
     this.altMask[WAIT] = 1; // the floor survives suppression
-    return decide(this.out, this.altMask);
+    return decide(this.out, this.altMask, { temperature: this.temperature, rng: this.rng });
   }
 
   /** The only place in `ai/` that mutates the match. */

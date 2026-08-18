@@ -1,7 +1,7 @@
 import { NeatRng, buildNetwork, cloneGenome, mutate, type Genome } from "../neat/index.js";
 import type { TrainingConfig } from "./config.js";
 import { buildValidationSlate } from "./slate.js";
-import { evaluateCandidate, evaluateGenome, networkCandidate } from "./matchEvaluator.js";
+import { evaluateGenome, networkCandidate, playScenario } from "./matchEvaluator.js";
 import { buildSelfPlayTables, evaluatePopulation } from "./selfPlay.js";
 
 /**
@@ -216,6 +216,12 @@ export interface BehaviourReport {
     waits: number;
     /** Of all waits, the share where nothing else was legal. */
     forcedShare: number;
+    /** Share of decisions where the choice differed from the previous one. */
+    switchRate: number;
+    /** Distinct heads used across the match, out of 14 primary actions. */
+    distinctActions: number;
+    /** Mean legal actions offered per decision. */
+    legalPerDecision: number;
   }[];
   /** Mean pairwise distance between behaviour profiles. 0 = identical play. */
   diversity: number;
@@ -242,26 +248,22 @@ export function behaviourDiversity(
 
   const profiles = genomes.map((genome) => {
     const candidate = networkCandidate(buildNetwork(genome), genome.id);
-    const result = evaluateCandidate(candidate, single, config.fitness);
-    const totals = result.scenarios.reduce(
-      (acc, s) => ({
-        casts: acc.casts + s.casts,
-        invests: acc.invests + s.invests,
-        economy: acc.economy + s.citizensBought + s.repairs + s.shields,
-        waits: acc.waits + s.waits,
-        forced: acc.forced + s.forcedWaits,
-        decisions: acc.decisions + s.decisions,
-      }),
-      { casts: 0, invests: 0, economy: 0, waits: 0, forced: 0, decisions: 0 },
-    );
-    const n = Math.max(1, totals.decisions);
+    // One scenario, then read the controller's own counters. The action-
+    // variability numbers live on ControllerStats rather than on the scored
+    // result, because they describe the POLICY rather than the match.
+    const result = playScenario(candidate, single.scenarios[0]!, config.fitness);
+    const stats = candidate.stats();
+    const n = Math.max(1, result.decisions);
     return {
-      casts: totals.casts / n,
-      invests: totals.invests / n,
-      economy: totals.economy / n,
-      waits: totals.waits / n,
-      forcedShare: totals.forced / n,
-      decisions: totals.decisions,
+      casts: result.casts / n,
+      invests: result.invests / n,
+      economy: (result.citizensBought + result.repairs + result.shields) / n,
+      waits: result.waits / n,
+      forcedShare: result.forcedWaits / n,
+      switchRate: (stats?.actionSwitches ?? 0) / n,
+      distinctActions: stats?.distinctActions ?? 0,
+      legalPerDecision: (stats?.legalOffered ?? 0) / n,
+      decisions: result.decisions,
     };
   });
 
@@ -281,9 +283,11 @@ export function behaviourDiversity(
   }
 
   return {
-    profiles: profiles.map(({ casts, invests, economy, waits, forcedShare }) => ({
-      casts, invests, economy, waits, forcedShare,
-    })),
+    profiles: profiles.map(
+      ({ casts, invests, economy, waits, forcedShare, switchRate, distinctActions, legalPerDecision }) => ({
+        casts, invests, economy, waits, forcedShare, switchRate, distinctActions, legalPerDecision,
+      }),
+    ),
     diversity: pairs > 0 ? sum / pairs : 0,
     meanDecisions:
       profiles.reduce((s, p) => s + p.decisions, 0) / Math.max(1, profiles.length),

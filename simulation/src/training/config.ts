@@ -2,6 +2,7 @@ import { KINGDOM_IDS, type KingdomId } from "../../../src/data/kingdoms.js";
 import { withConfig, type NeatConfig } from "../neat/index.js";
 import { DEFAULT_FITNESS, type FitnessConfig } from "./fitness.js";
 import { DEFAULT_SLATE, type SlateConfig } from "./slate.js";
+import { DEFAULT_SELF_PLAY, type SelfPlayConfig } from "./selfPlay.js";
 
 /**
  * Training configuration — the layer that knows both NEAT and Elementals.
@@ -9,6 +10,17 @@ import { DEFAULT_SLATE, type SlateConfig } from "./slate.js";
 
 export interface TrainingConfig {
   neat: NeatConfig;
+  /**
+   * How genomes are opposed.
+   *
+   * "heuristic" plays the fixed personality slate; "selfPlay" plays the
+   * population against itself. Self-play is the default because the heuristics
+   * stopped discriminating — measured best fitness sat within 0.4% of the
+   * formula's ceiling from generation zero, so selection had nothing to work
+   * with. See `selfPlay.ts` for what that buys and what it costs.
+   */
+  mode: "heuristic" | "selfPlay";
+  selfPlay: SelfPlayConfig;
   slate: SlateConfig;
   fitness: FitnessConfig;
   /** Seed for the whole run: population, slate sampling, match seeds. */
@@ -55,6 +67,8 @@ export function trainingConfig(overrides: Partial<TrainingConfig> = {}): Trainin
       normalizeBySize: false,
       ...(overrides.neat ?? {}),
     }),
+    mode: overrides.mode ?? "selfPlay",
+    selfPlay: { ...DEFAULT_SELF_PLAY, ...(overrides.selfPlay ?? {}) },
     slate: { ...DEFAULT_SLATE, ...(overrides.slate ?? {}) },
     fitness: { ...DEFAULT_FITNESS, ...(overrides.fitness ?? {}) },
     seed: overrides.seed ?? 20260817,

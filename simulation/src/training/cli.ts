@@ -3,6 +3,7 @@ import { KINGDOM_IDS, type KingdomId } from "../../../src/data/kingdoms.js";
 import { trainingConfig, type TrainingConfig } from "./config.js";
 import { buildSlate, buildValidationSlate, slateSize, slateSeatCost, type MatchFormat } from "./slate.js";
 import { estimateMatches, toModel, train, writeModel } from "./trainer.js";
+import { tableCount, type SelfPlayConfig } from "./selfPlay.js";
 import { formatBaselines, runBaselines } from "./baselines.js";
 
 /**
@@ -50,6 +51,13 @@ function configFromFlags(defaults: { generations: number; population: number }):
   const base = trainingConfig();
   return trainingConfig({
     generations: flag("generations", defaults.generations),
+    mode: has("heuristic") ? "heuristic" : "selfPlay",
+    selfPlay: {
+      formats: formats.length > 0 ? formats : ["duel", "ffa4", "ffa7"],
+      roundsPerFormat: flag("rounds-per-format", 2),
+      hallOfFameShare: flag("hof-share", 0.15),
+      maxTicks: flag("max-ticks", 8_000),
+    } satisfies SelfPlayConfig,
     validateEvery: flag("validate-every", 5),
     seed: flag("seed", 20260817),
     kingdoms,
@@ -104,16 +112,31 @@ function trainCommand(): void {
   const checkpointPath = text("checkpoint", "runs/neat/checkpoint.json");
   const perGenome = slateSize(config.slate, config.kingdoms.length);
 
-  console.log(
-    `NEAT training — population ${config.neat.populationSize}, ` +
-      `${config.generations} generations, ${perGenome} matches/genome, ` +
-      `${estimateMatches(config).toLocaleString()} matches total`,
-  );
-  console.log(
-    `  formats ${config.slate.formats.join(",")}  ` +
-      `opponents ${config.slate.opponents.join(",")}  ` +
-      `balance ${config.balanceConfigId}`,
-  );
+  if (config.mode === "selfPlay") {
+    const perGeneration = tableCount(config.selfPlay, config.neat.populationSize);
+    console.log(
+      `NEAT training (SELF-PLAY) — population ${config.neat.populationSize}, ` +
+        `${config.generations} generations, ${perGeneration} matches/generation, ` +
+        `${(perGeneration * config.generations).toLocaleString()} matches total`,
+    );
+    console.log(
+      `  formats ${config.selfPlay.formats.join(",")}  ` +
+        `${config.selfPlay.roundsPerFormat} rounds/format  ` +
+        `hall-of-fame share ${config.selfPlay.hallOfFameShare}  ` +
+        `balance ${config.balanceConfigId}`,
+    );
+  } else {
+    console.log(
+      `NEAT training (heuristic) — population ${config.neat.populationSize}, ` +
+        `${config.generations} generations, ${perGenome} matches/genome, ` +
+        `${estimateMatches(config).toLocaleString()} matches total`,
+    );
+    console.log(
+      `  formats ${config.slate.formats.join(",")}  ` +
+        `opponents ${config.slate.opponents.join(",")}  ` +
+        `balance ${config.balanceConfigId}`,
+    );
+  }
   const validation = buildValidationSlate(config.kingdoms, config.balanceConfigId, {
     maxTicks: config.slate.maxTicks,
   });
@@ -135,6 +158,7 @@ function trainCommand(): void {
           `best ${record.best.toFixed(4)}  mean ${record.mean.toFixed(4)}  ` +
           `species ${String(record.species).padStart(2)}  ` +
           `W/L/D ${record.wins}/${record.losses}/${record.draws}  ` +
+          `hof ${String(record.hallOfFame).padStart(2)}  ` +
           `timeouts ${String(record.timeouts).padStart(3)}  ` +
           `nodes ${record.meanNodes.toFixed(1)}  conns ${record.meanConnections.toFixed(0)}  ` +
           (record.validationFitness !== null
@@ -244,6 +268,9 @@ switch (command) {
         "  --validate-every N     champion vs the frozen validation slate (default 5)",
         "  --seeds N              repeats per scenario on different seeds",
         "  --hours N              stop cleanly at a generation boundary after N hours",
+        "  --heuristic            train against fixed personalities instead of self-play",
+        "  --rounds-per-format N  self-play matches per genome per format (default 2)",
+        "  --hof-share F          fraction of seats given to past champions (default 0.15)",
         "  --seed N               run seed",
       ].join("\n"),
     );

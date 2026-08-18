@@ -29,6 +29,17 @@ import { Population, withConfig } from "../simulation/src/neat/index.js";
 /** Cheap enough to run in the suite, real enough to exercise the whole loop. */
 function config(overrides: Partial<TrainingConfig> = {}): TrainingConfig {
   return trainingConfig({
+    // Self-play is the default, and resume equivalence must hold for it — the
+    // Hall of Fame is part of the environment, so a resume that lost it would
+    // silently play different matches.
+    mode: "selfPlay",
+    selfPlay: {
+      formats: ["duel"],
+      roundsPerFormat: 1,
+      hallOfFameShare: 0.5,
+      maxTicks: 1_500,
+    },
+    validateEvery: 0,
     generations: 4,
     checkpointEvery: 1,
     neat: withConfig({

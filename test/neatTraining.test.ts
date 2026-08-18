@@ -379,6 +379,7 @@ test("a heuristic outfights a random network on the same slate", () => {
 
 test("a short training run completes and reports its champion", () => {
   const config = trainingConfig({
+    mode: "heuristic",
     generations: 2,
     neat: withConfig({ populationSize: 4, activation: "tanh", initialConnectivity: 0.25 }),
     slate: { ...smallSlate().slate, maxTicks: 2_500 },
@@ -395,7 +396,10 @@ test("a short training run completes and reports its champion", () => {
 });
 
 test("estimateMatches matches what a run actually plays", () => {
+  // estimateMatches describes the HEURISTIC slate; self-play shares matches
+  // between genomes, so its budget is tableCount, not population x scenarios.
   const config = trainingConfig({
+    mode: "heuristic",
     generations: 2,
     neat: withConfig({ populationSize: 3, activation: "tanh", initialConnectivity: 0.25 }),
     slate: { ...smallSlate().slate, maxTicks: 2_000 },

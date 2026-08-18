@@ -5,6 +5,12 @@ import { MODEL_FORMAT_VERSION, type AiModel, type Difficulty } from "../ai/index
 import type { TrainingConfig } from "./config.js";
 import { ELEMENTALS_SHAPE, evaluateGenome } from "./matchEvaluator.js";
 import { buildSlate, buildValidationSlate, slateSize, type Slate } from "./slate.js";
+import {
+  HallOfFame,
+  buildSelfPlayTables,
+  evaluatePopulation,
+  tableCount,
+} from "./selfPlay.js";
 import type { TrainingResult } from "./fitness.js";
 import { AI_FITNESS_VERSION } from "./fitness.js";
 import {
@@ -37,6 +43,9 @@ export interface GenerationRecord extends GenerationReport {
   kills: number;
   casts: number;
   slateHash: string;
+  /** Matches actually played this generation (self-play shares matches). */
+  matchesPlayed: number;
+  hallOfFame: number;
   /**
    * Champion fitness on the frozen validation slate, when one was run this
    * generation. Null otherwise — never interpolated, because a made-up point on
@@ -85,6 +94,8 @@ export function train(options: TrainOptions): TrainingRunResult {
   let history: GenerationRecord[] = [];
   let restoredChampion: Genome | null = null;
   let restoredChampionGeneration: number | null = null;
+  let restoredHall: { genome: Genome; generation: number }[] | null = null;
+  let restoredLastAdmitted: string | null = null;
   let startGeneration = 0;
   let resumedFrom: number | null = null;
   let checkpointRejected: string | null = null;
@@ -99,6 +110,8 @@ export function train(options: TrainOptions): TrainingRunResult {
       resumedFrom = startGeneration;
       restoredChampion = load.checkpoint.champion;
       restoredChampionGeneration = load.checkpoint.championGeneration;
+      restoredHall = load.checkpoint.hallOfFame ?? null;
+      restoredLastAdmitted = load.checkpoint.lastAdmitted ?? null;
     } else {
       population = new Population(ELEMENTALS_SHAPE, config.neat, config.seed);
     }
@@ -121,6 +134,13 @@ export function train(options: TrainOptions): TrainingRunResult {
         })
       : null;
 
+  // Past champions kept as opposition. Under self-play the population can
+  // otherwise cycle — A beats B beats C beats A — and call the churn progress.
+  const hallOfFame = restoredHall
+    ? HallOfFame.fromJSON(restoredHall)
+    : new HallOfFame();
+  let lastAdmitted: string | null = restoredLastAdmitted;
+
   let champion: Genome | null = restoredChampion;
   let championGeneration: number | null = restoredChampionGeneration;
   // Only populated when the champion is found in THIS session: the per-scenario
@@ -140,7 +160,23 @@ export function train(options: TrainOptions): TrainingRunResult {
       config.balanceConfigId,
     );
     const genomes = population.ask();
-    const results = genomes.map((genome) => evaluateGenome(genome, slate, config.fitness));
+
+    let results: TrainingResult[];
+    let matchesPlayed: number;
+    if (config.mode === "selfPlay") {
+      const tables = buildSelfPlayTables(
+        generation,
+        config.selfPlay,
+        genomes.length,
+        config.kingdoms,
+        hallOfFame.size,
+      );
+      results = evaluatePopulation(genomes, hallOfFame.genomes, tables, config.fitness);
+      matchesPlayed = tables.length;
+    } else {
+      results = genomes.map((genome) => evaluateGenome(genome, slate, config.fitness));
+      matchesPlayed = results.reduce((sum, r) => sum + r.matches, 0);
+    }
 
     results.forEach((result, i) => {
       if (champion === null || result.fitness > champion.fitness) {
@@ -151,6 +187,20 @@ export function train(options: TrainOptions): TrainingRunResult {
         championResult = result;
       }
     });
+
+    // Admit this generation's best to the Hall of Fame. Done AFTER scoring so
+    // a champion never faces itself in the generation that produced it.
+    if (config.mode === "selfPlay") {
+      const bestIndex = results.reduce(
+        (best, r, i) => (r.fitness > results[best]!.fitness ? i : best),
+        0,
+      );
+      const candidate = genomes[bestIndex]!;
+      if (candidate.id !== lastAdmitted) {
+        hallOfFame.admit(cloneGenome(candidate), generation);
+        lastAdmitted = candidate.id;
+      }
+    }
 
     const report = population.tell(results.map((r) => r.fitness));
     const sum = (pick: (r: TrainingResult) => number): number =>
@@ -191,6 +241,8 @@ export function train(options: TrainOptions): TrainingRunResult {
       kills: sum((r) => r.totalKills),
       casts: sum((r) => r.totalCasts),
       slateHash: slate.hash,
+      matchesPlayed,
+      hallOfFame: hallOfFame.size,
       validationFitness,
       validationWins,
       durationMs: Date.now() - generationStarted,
@@ -212,6 +264,8 @@ export function train(options: TrainOptions): TrainingRunResult {
         history,
         champion,
         championGeneration,
+        hallOfFame: hallOfFame.toJSON(),
+        lastAdmitted,
       } satisfies TrainingCheckpoint);
     }
 

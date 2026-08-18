@@ -44,6 +44,17 @@ export {
 export { CombatObserver, type SeatCombat } from "./matchObserver.js";
 
 export {
+  DEFAULT_SELF_PLAY,
+  HallOfFame,
+  buildSelfPlayTables,
+  evaluatePopulation,
+  playTable,
+  tableCount,
+  type SelfPlayConfig,
+  type SelfPlayTable,
+} from "./selfPlay.js";
+
+export {
   ELEMENTALS_SHAPE,
   evaluateCandidate,
   evaluateGenome,

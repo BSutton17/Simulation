@@ -79,6 +79,17 @@ export interface TrainingCheckpoint {
    */
   champion: Genome | null;
   championGeneration: number | null;
+  /**
+   * The Hall of Fame, and the id last admitted to it.
+   *
+   * Carried because under self-play the Hall is part of the ENVIRONMENT, not
+   * merely a record: past champions occupy seats, so a resumed run that started
+   * with an empty Hall would play different matches, score different fitnesses
+   * and diverge from the uninterrupted run. Caught by the resume-equivalence
+   * test, which is the only thing that would ever have noticed.
+   */
+  hallOfFame: { genome: Genome; generation: number }[];
+  lastAdmitted: string | null;
 }
 
 /** What this build believes it is. */

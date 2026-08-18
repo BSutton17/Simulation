@@ -1,14 +1,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Population, cloneGenome, type GenerationReport, type Genome } from "../neat/index.js";
-import {
-  MODEL_FORMAT_VERSION,
-  type AiModel,
-  type Difficulty,
-} from "../ai/index.js";
+import { MODEL_FORMAT_VERSION, type AiModel, type Difficulty } from "../ai/index.js";
 import type { TrainingConfig } from "./config.js";
 import { ELEMENTALS_SHAPE, evaluateGenome } from "./matchEvaluator.js";
-import { buildSlate, slateSize, type SlateEntry } from "./slate.js";
+import { buildSlate, slateSize, type Slate } from "./slate.js";
+import type { TrainingResult } from "./fitness.js";
+import { AI_FITNESS_VERSION } from "./fitness.js";
 import {
   TRAINING_CHECKPOINT_VERSION,
   localIdentity,
@@ -28,18 +26,35 @@ import {
 
 export interface GenerationRecord extends GenerationReport {
   wins: number;
+  losses: number;
+  draws: number;
   timeouts: number;
   inactive: number;
   meanPlacement: number;
   matches: number;
+  damageDealt: number;
+  damageReceived: number;
+  kills: number;
+  casts: number;
+  slateHash: string;
   durationMs: number;
 }
 
-export interface TrainingResult {
+export interface TrainingRunResult {
   generations: number;
   history: GenerationRecord[];
   best: Genome;
   bestFitness: number;
+  /** Generation the champion was found in; survives a resume. */
+  bestGeneration: number | null;
+  /**
+   * The champion's full per-scenario result.
+   *
+   * Null when the champion was restored from a checkpoint rather than found in
+   * this session — the detail is too large to persist, and the genome is what a
+   * model needs.
+   */
+  bestResult: TrainingResult | null;
   resumedFrom: number | null;
   checkpointRejected: string | null;
 }
@@ -55,12 +70,14 @@ export interface TrainOptions {
   budgetMs?: number;
 }
 
-export function train(options: TrainOptions): TrainingResult {
+export function train(options: TrainOptions): TrainingRunResult {
   const { config } = options;
   const identity = localIdentity(config);
 
   let population: Population;
   let history: GenerationRecord[] = [];
+  let restoredChampion: Genome | null = null;
+  let restoredChampionGeneration: number | null = null;
   let startGeneration = 0;
   let resumedFrom: number | null = null;
   let checkpointRejected: string | null = null;
@@ -73,6 +90,8 @@ export function train(options: TrainOptions): TrainingResult {
       history = load.checkpoint.history;
       startGeneration = load.checkpoint.completedGenerations;
       resumedFrom = startGeneration;
+      restoredChampion = load.checkpoint.champion;
+      restoredChampionGeneration = load.checkpoint.championGeneration;
     } else {
       population = new Population(ELEMENTALS_SHAPE, config.neat, config.seed);
     }
@@ -86,35 +105,55 @@ export function train(options: TrainOptions): TrainingResult {
   // cloned complete with their parent's fitness, so asking the live population
   // for its best after a generation returns a genome whose recorded fitness was
   // measured on a different generation's slate.
-  let champion: Genome | null = null;
+  let champion: Genome | null = restoredChampion;
+  let championGeneration: number | null = restoredChampionGeneration;
+  // Only populated when the champion is found in THIS session: the per-scenario
+  // detail is far too large to carry in a checkpoint, and the genome is what a
+  // model actually needs.
+  let championResult: TrainingResult | null = null;
 
   for (let generation = startGeneration; generation < config.generations; generation++) {
     const generationStarted = Date.now();
-    // One slate per generation, shared by every genome: differences in fitness
-    // are then differences in play rather than in which matchups were drawn.
-    const slate: SlateEntry[] = buildSlate(generation, config.slate, config.kingdoms, config.seed);
-    const genomes = population.ask();
-
-    const evaluations = genomes.map((genome) =>
-      evaluateGenome(genome, slate, config.fitness, config.slate.maxTicks),
+    // One slate per generation, shared by every genome: a fitness difference is
+    // then a difference in play rather than in which matchups were drawn.
+    const slate: Slate = buildSlate(
+      generation,
+      config.slate,
+      config.kingdoms,
+      config.seed,
+      config.balanceConfigId,
     );
-    evaluations.forEach((evaluation, i) => {
-      if (champion === null || evaluation.fitness > champion.fitness) {
+    const genomes = population.ask();
+    const results = genomes.map((genome) => evaluateGenome(genome, slate, config.fitness));
+
+    results.forEach((result, i) => {
+      if (champion === null || result.fitness > champion.fitness) {
         const snapshot = cloneGenome(genomes[i]!);
-        snapshot.fitness = evaluation.fitness;
+        snapshot.fitness = result.fitness;
         champion = snapshot;
+        championGeneration = generation;
+        championResult = result;
       }
     });
-    const report = population.tell(evaluations.map((e) => e.fitness));
+
+    const report = population.tell(results.map((r) => r.fitness));
+    const sum = (pick: (r: TrainingResult) => number): number =>
+      results.reduce((total, r) => total + pick(r), 0);
 
     const record: GenerationRecord = {
       ...report,
-      wins: evaluations.reduce((sum, e) => sum + e.wins, 0),
-      timeouts: evaluations.reduce((sum, e) => sum + e.timeouts, 0),
-      inactive: evaluations.reduce((sum, e) => sum + e.inactive, 0),
-      meanPlacement:
-        evaluations.reduce((sum, e) => sum + e.meanPlacement, 0) / evaluations.length,
-      matches: evaluations.reduce((sum, e) => sum + e.matches, 0),
+      wins: sum((r) => r.wins),
+      losses: sum((r) => r.losses),
+      draws: sum((r) => r.draws),
+      timeouts: sum((r) => r.timeouts),
+      inactive: sum((r) => r.inactive),
+      meanPlacement: sum((r) => r.meanPlacement) / results.length,
+      matches: sum((r) => r.matches),
+      damageDealt: sum((r) => r.totalDamageDealt),
+      damageReceived: sum((r) => r.totalDamageReceived),
+      kills: sum((r) => r.totalKills),
+      casts: sum((r) => r.totalCasts),
+      slateHash: slate.hash,
       durationMs: Date.now() - generationStarted,
     };
     history.push(record);
@@ -125,15 +164,16 @@ export function train(options: TrainOptions): TrainingResult {
       config.checkpointEvery > 0 &&
       (generation + 1) % config.checkpointEvery === 0
     ) {
-      const checkpoint: TrainingCheckpoint = {
+      writeCheckpoint(options.checkpointPath, {
         version: TRAINING_CHECKPOINT_VERSION,
         identity,
         writtenAt: new Date().toISOString(),
         completedGenerations: generation + 1,
         population: population.snapshot(),
         history,
-      };
-      writeCheckpoint(options.checkpointPath, checkpoint);
+        champion,
+        championGeneration,
+      } satisfies TrainingCheckpoint);
     }
 
     if (options.budgetMs !== undefined && Date.now() - started >= options.budgetMs) break;
@@ -145,6 +185,8 @@ export function train(options: TrainOptions): TrainingResult {
     history,
     best,
     bestFitness: best.fitness,
+    bestGeneration: championGeneration,
+    bestResult: championResult,
     resumedFrom,
     checkpointRejected,
   };
@@ -191,7 +233,7 @@ export function toModel(
     training: {
       seed: config.seed,
       generation,
-      fitnessVersion: identity.fitnessVersion,
+      fitnessVersion: AI_FITNESS_VERSION,
       trainedAt: new Date().toISOString(),
     },
     genome,

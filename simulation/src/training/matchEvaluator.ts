@@ -1,20 +1,30 @@
 import { runHeadlessMatch } from "../headless.js";
-import { mulberry32 } from "../rng.js";
 import { PERSONALITIES } from "../personalities.js";
 import { personalityAI, type PersonalityProfile } from "../personality.js";
 import {
+  ACTION_SIZE,
   NetworkController,
   OBSERVATION_SIZE,
-  ACTION_SIZE,
   type ControllerStats,
+  type Difficulty,
   type Network,
 } from "../ai/index.js";
-import { buildNetwork, type ActivationNetwork, type Genome, type GenomeShape } from "../neat/index.js";
-import type { PlayerSpec } from "../types.js";
-import type { Difficulty } from "../ai/index.js";
-import type { FitnessConfig } from "./config.js";
-import { aggregate, scoreMatch, type GenomeFitness, type MatchScore } from "./fitness.js";
-import type { SlateEntry } from "./slate.js";
+import {
+  buildNetwork,
+  type ActivationNetwork,
+  type Genome,
+  type GenomeShape,
+} from "../neat/index.js";
+import type { AIFactory, PlayerSpec } from "../types.js";
+import {
+  aggregate,
+  scoreScenario,
+  type FitnessConfig,
+  type ScenarioResult,
+  type TrainingResult,
+} from "./fitness.js";
+import { CombatObserver } from "./matchObserver.js";
+import type { Slate, SlateScenario } from "./slate.js";
 
 /**
  * The adapter: genome → network → controller → real matches → fitness.
@@ -27,9 +37,9 @@ import type { SlateEntry } from "./slate.js";
  * Compile-time proof that a compiled genome satisfies the runtime contract.
  *
  * `neat/networkBuilder.ts` deliberately does not import `ai/network.ts` — that
- * would put an Elementals edge into the generic algorithm — so the two `Network`
- * shapes are kept aligned structurally instead. If either drifts, this
- * assignment stops compiling, here, rather than at some later cast.
+ * would put an Elementals edge into the generic algorithm — so the two network
+ * shapes are kept aligned structurally instead. If either drifts, this stops
+ * compiling here rather than failing at some later cast.
  */
 type NetworkContractHolds = ActivationNetwork extends Network ? true : never;
 const _contract: NetworkContractHolds = true;
@@ -42,104 +52,161 @@ export const ELEMENTALS_SHAPE: GenomeShape = {
   activation: "tanh",
 };
 
-export interface GenomeEvaluation extends GenomeFitness {
-  scores: MatchScore[];
-}
-
 function profileFor(id: string): PersonalityProfile {
   const profile = PERSONALITIES[id as keyof typeof PERSONALITIES];
   if (!profile) throw new Error(`unknown opponent profile "${id}"`);
   return profile as PersonalityProfile;
 }
 
+const emptyStats = (): ControllerStats => ({
+  decisions: 0, casts: 0, invests: 0, citizens: 0, repairs: 0, shields: 0,
+  retargets: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
+});
+
 /**
- * Plays one slate entry and scores it.
+ * A candidate: something that can drive the seat under evaluation.
  *
- * The genome's controller stats are captured so `casts` can feed the inactivity
- * guard — a genome that never acted must not be rewarded for outlasting seats
- * that fought each other.
+ * `stats` is optional because a heuristic personality has none — only the
+ * network controller reports decision counters. The behaviour fields of a
+ * personality's result are therefore zero, which the baseline report says
+ * plainly rather than implying the heuristic never acted.
  */
-export function playMatch(
-  genomeNetwork: Network,
-  entry: SlateEntry,
-  fitness: FitnessConfig,
-  maxTicks: number,
+export interface Candidate {
+  readonly name: string;
+  readonly factory: AIFactory;
+  /** Stats for the most recent match, when the controller keeps them. */
+  stats(): ControllerStats | null;
+}
+
+/** Drives the seat with a compiled network. */
+export function networkCandidate(
+  network: Network,
+  name = "neat",
   difficulty: Difficulty = "hard",
-): { score: MatchScore; stats: ControllerStats } {
+): Candidate {
+  let latest: ControllerStats | null = null;
+  return {
+    name,
+    factory: (player, rng) => {
+      const controller = new NetworkController(player, { network, rng, difficulty });
+      latest = controller.stats;
+      return controller;
+    },
+    stats: () => latest,
+  };
+}
+
+/** Drives the seat with one of the shipped heuristic personalities. */
+export function personalityCandidate(profileId: string): Candidate {
+  const profile = profileFor(profileId);
+  const factory = personalityAI(profile);
+  return { name: profileId, factory, stats: () => null };
+}
+
+/** Plays one scenario and scores it. */
+export function playScenario(
+  candidate: Candidate,
+  scenario: SlateScenario,
+  config: FitnessConfig,
+): ScenarioResult {
   const seats: PlayerSpec[] = [];
   let opponentIndex = 0;
-  for (let i = 0; i < entry.opponentKingdoms.length + 1; i++) {
-    if (i === entry.seat) {
-      seats.push({ kingdomId: entry.kingdom, name: `neat-${entry.kingdom}` });
+  for (let i = 0; i < scenario.seats; i++) {
+    if (i === scenario.candidateSeat) {
+      seats.push({
+        kingdomId: scenario.candidateKingdom,
+        name: `candidate-${scenario.candidateKingdom}`,
+        ai: candidate.factory,
+      });
     } else {
-      const kingdom = entry.opponentKingdoms[opponentIndex]!;
-      const profile = profileFor(entry.opponentProfiles[opponentIndex]!);
+      const kingdom = scenario.opponentKingdoms[opponentIndex]!;
+      const profile = profileFor(scenario.opponentProfiles[opponentIndex]!);
       opponentIndex += 1;
-      seats.push({ kingdomId: kingdom, name: `${profile.name}-${kingdom}`, ai: personalityAI(profile) });
+      seats.push({
+        kingdomId: kingdom,
+        name: `${profile.name}-${kingdom}`,
+        ai: personalityAI(profile),
+      });
     }
   }
 
-  let stats: ControllerStats | null = null;
-  seats[entry.seat] = {
-    ...seats[entry.seat]!,
-    ai: (player, rng) => {
-      const controller = new NetworkController(player, {
-        network: genomeNetwork,
-        rng,
-        difficulty,
-      });
-      stats = controller.stats;
-      return controller;
-    },
-  };
-
+  const observer = new CombatObserver();
   const record = runHeadlessMatch({
     players: seats,
-    seed: entry.seed,
-    maxTicks,
-    // Seats carry their own factories; this is only the fallback.
+    seed: scenario.seed,
+    maxTicks: scenario.maxTicks,
+    // Every seat carries its own factory; this is only the fallback.
     createAI: personalityAI(profileFor("balanced")),
+    observers: [observer],
+    // The training-side CombatObserver supplies everything fitness reads, so
+    // the far heavier TelemetryCollector stays off.
     telemetry: false,
   });
 
-  const playerId = `p${entry.seat}`;
-  const captured: ControllerStats = stats ?? {
-    decisions: 0, casts: 0, invests: 0, citizens: 0, repairs: 0, shields: 0,
-    retargets: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
-  };
-  return {
-    score: scoreMatch(record, playerId, captured.casts, fitness),
-    stats: captured,
-  };
+  const playerId = `p${scenario.candidateSeat}`;
+  const combat = observer.for(playerId);
+  // Controller stats are diagnostics and exist only for the network controller;
+  // `casts` comes from the event stream so every candidate is measured the same
+  // way. A heuristic reports no stats and must not therefore look inactive.
+  const stats = candidate.stats() ?? emptyStats();
+  return scoreScenario(
+    record,
+    playerId,
+    {
+      scenarioId: scenario.id,
+      format: scenario.format,
+      seats: scenario.seats,
+      kingdom: scenario.candidateKingdom,
+      seat: scenario.candidateSeat,
+      combat,
+      behaviour: {
+        casts: combat.casts, invests: stats.invests, citizens: stats.citizens,
+        repairs: stats.repairs, shields: stats.shields, retargets: stats.retargets,
+        waits: stats.waits, decisions: stats.decisions,
+      },
+    },
+    config,
+  );
 }
 
-/** Plays a genome's whole slate and returns its fitness. */
-export function evaluateGenome(
-  genome: Genome,
-  slate: readonly SlateEntry[],
-  fitness: FitnessConfig,
-  maxTicks: number,
-  difficulty: Difficulty = "hard",
-): GenomeEvaluation {
-  const network = buildNetwork(genome);
-  const scores: MatchScore[] = [];
+/**
+ * Plays a whole slate with one candidate.
+ *
+ * Taking a `Candidate` rather than a network is what lets `baselines.ts` put a
+ * heuristic personality, a random network and a trained genome through the
+ * IDENTICAL scenarios — same kingdoms, same opponents, same seats, same seeds.
+ * Without that, "NEAT beat the heuristic" would be a claim about two different
+ * sets of matches.
+ */
+export function evaluateCandidate(
+  candidate: Candidate,
+  slate: Slate,
+  config: FitnessConfig,
+): TrainingResult {
+  const scenarios: ScenarioResult[] = [];
   let rejected = 0;
-  for (const entry of slate) {
-    const { score, stats } = playMatch(network, entry, fitness, maxTicks, difficulty);
-    rejected += stats.rejected;
-    scores.push(score);
+  for (const scenario of slate.scenarios) {
+    scenarios.push(playScenario(candidate, scenario, config));
+    rejected += candidate.stats()?.rejected ?? 0;
   }
   if (rejected > 0) {
-    // The mask and the engine disagreeing is a defect, not a strategy problem,
-    // and it would quietly distort every fitness number in the run.
-    throw new Error(
-      `genome ${genome.id}: the engine refused ${rejected} action(s) the mask permitted`,
-    );
+    // The action mask and the engine disagreeing is a defect, not a strategy
+    // problem, and it would quietly distort every fitness number in the run.
+    throw new Error(`the engine refused ${rejected} action(s) the action mask permitted`);
   }
-  return { ...aggregate(scores), scores };
+  return aggregate(scenarios);
 }
 
-/** A seeded stream for anything the evaluator itself needs to randomize. */
-export function evaluatorRng(seed: number) {
-  return mulberry32(seed);
+/** Evaluates one genome over a slate. */
+export function evaluateGenome(
+  genome: Genome,
+  slate: Slate,
+  config: FitnessConfig,
+  difficulty: Difficulty = "hard",
+): TrainingResult {
+  return evaluateCandidate(
+    networkCandidate(buildNetwork(genome), `neat-${genome.id}`, difficulty),
+    slate,
+    config,
+  );
 }

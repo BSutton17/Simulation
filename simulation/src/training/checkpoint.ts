@@ -8,7 +8,10 @@ import {
   observationSpecHash,
 } from "../ai/index.js";
 import { NEAT_CONFIG_VERSION, configHash, type PopulationSnapshot } from "../neat/index.js";
-import { AI_FITNESS_VERSION, type TrainingConfig } from "./config.js";
+import type { TrainingConfig } from "./config.js";
+import { AI_FITNESS_VERSION } from "./fitness.js";
+import { SLATE_VERSION, slateShapeHash } from "./slate.js";
+import type { Genome } from "../neat/index.js";
 import type { GenerationRecord } from "./trainer.js";
 
 /**
@@ -42,6 +45,19 @@ export interface TrainingIdentity {
   balanceConfigHash: string;
   seed: number;
   populationSize: number;
+  /**
+   * The slate's SHAPE — formats, kingdoms, opponents, seats, tick cap.
+   *
+   * A genome's fitness only means something next to the matches that produced
+   * it, so resuming under a redesigned slate would splice two incomparable
+   * searches together and present the result as one. Pinned as the shape rather
+   * than the built slate, because the design deliberately rotates matchups every
+   * generation and a resume must not be refused for doing what it was told.
+   */
+  slateVersion: string;
+  slateShapeHash: string;
+  /** Which balance configuration the environment was running. */
+  balanceConfigId: string;
 }
 
 export interface TrainingCheckpoint {
@@ -51,6 +67,18 @@ export interface TrainingCheckpoint {
   completedGenerations: number;
   population: PopulationSnapshot;
   history: GenerationRecord[];
+  /**
+   * The best genome seen so far, and when.
+   *
+   * Carried because the champion is run state, not population state. `tell()`
+   * replaces the population every generation, so a champion found in generation
+   * 0 no longer exists in the population by generation 4 — a resume that
+   * restored only the population would silently forget it and go on to save a
+   * worse model. Found by the resume-equivalence test, which compared champion
+   * identity rather than merely fitness.
+   */
+  champion: Genome | null;
+  championGeneration: number | null;
 }
 
 /** What this build believes it is. */
@@ -73,6 +101,14 @@ export function localIdentity(config: TrainingConfig): TrainingIdentity {
     balanceConfigHash: provenance.balanceConfigHash,
     seed: config.seed,
     populationSize: config.neat.populationSize,
+    slateVersion: SLATE_VERSION,
+    slateShapeHash: slateShapeHash(
+      config.slate,
+      config.kingdoms,
+      config.seed,
+      config.balanceConfigId,
+    ),
+    balanceConfigId: config.balanceConfigId,
   };
 }
 

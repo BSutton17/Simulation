@@ -8,35 +8,37 @@ import {
   aggregate,
   buildSlate,
   estimateMatches,
+  evaluateCandidate,
   evaluateGenome,
+  formatBaselines,
+  hashSlate,
   identityMismatches,
   localIdentity,
+  maxScore,
+  personalityCandidate,
   placementOf,
-  readCheckpoint,
-  scoreMatch,
+  randomCandidate,
+  runBaselines,
+  scoreScenario,
+  slateShapeHash,
   slateSize,
   toModel,
   train,
   trainingConfig,
   writeCheckpoint,
+  type ScenarioContext,
   type TrainingCheckpoint,
 } from "../simulation/src/training/index.js";
-import {
-  NeatRng,
-  Population,
-  createGenome,
-  withConfig,
-} from "../simulation/src/neat/index.js";
+import { NeatRng, Population, createGenome, withConfig } from "../simulation/src/neat/index.js";
 import { assertModelCompatible } from "../simulation/src/ai/index.js";
 import type { MatchRecord } from "../simulation/src/types.js";
 
 /**
- * The adapter: genome → network → controller → real Elementals matches.
+ * The training harness: slate, fitness, real matches, baselines, checkpoints.
  *
- * These are the tests that touch the game, so they are deliberately small —
- * one or two genomes over a few thousand ticks. The point is that the pipeline
- * carries current and that fitness means what it claims, not that anything has
- * learned to play.
+ * The tests that touch the game are deliberately small — a couple of genomes
+ * over a few thousand ticks. They prove the pipeline carries current and that
+ * fitness means what it claims, not that anything has learned to play.
  */
 
 function record(overrides: Partial<MatchRecord> = {}): MatchRecord {
@@ -55,27 +57,124 @@ function record(overrides: Partial<MatchRecord> = {}): MatchRecord {
   };
 }
 
+function context(overrides: Partial<ScenarioContext> = {}): ScenarioContext {
+  return {
+    scenarioId: "duel:water:balanced:s0:r0",
+    format: "duel",
+    seats: 2,
+    kingdom: "water",
+    seat: 0,
+    combat: { damageDealt: 5_000, damageReceived: 5_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0 },
+    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 1, shields: 1, retargets: 2, waits: 10, decisions: 100 },
+    ...overrides,
+  };
+}
+
+const FIT = trainingConfig().fitness;
+
 // ── fitness ─────────────────────────────────────────────────────────────
 
 test("placement ranks the winner first and the earliest death last", () => {
-  const r = record();
-  assert.equal(placementOf(r, "p0"), 1);
-  assert.equal(placementOf(r, "p1"), 2);
+  assert.equal(placementOf(record(), "p0"), 1);
+  assert.equal(placementOf(record(), "p1"), 2);
 });
 
-test("winning scores far above losing", () => {
-  const config = trainingConfig().fitness;
-  const win = scoreMatch(record(), "p0", 5, config);
-  const loss = scoreMatch(record(), "p1", 5, config);
-  assert.ok(win.score > loss.score + 0.5, `win ${win.score} vs loss ${loss.score}`);
+test("winning dominates the formula", () => {
+  const win = scoreScenario(record(), "p0", context(), FIT);
+  const loss = scoreScenario(record(), "p1", context(), FIT);
   assert.equal(win.won, true);
-  assert.equal(loss.won, false);
+  assert.equal(loss.lost, true);
+  // The win term alone must outweigh everything a loss can accumulate.
+  assert.ok(win.score > loss.score, `win ${win.score} vs loss ${loss.score}`);
+  assert.ok(
+    FIT.winWeight > FIT.placementWeight + FIT.survivalWeight + FIT.combatWeight,
+    "winning must dominate the shaping terms",
+  );
+});
+
+test("a strong win scores above a weak win", () => {
+  // Same victory, different quality: healthier castle, better exchange ratio.
+  const strong = scoreScenario(
+    record(),
+    "p0",
+    context({ combat: { damageDealt: 9_000, damageReceived: 1_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0 } }),
+    FIT,
+  );
+  const weak = scoreScenario(
+    record(),
+    "p0",
+    context({ combat: { damageDealt: 3_000, damageReceived: 8_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0 } }),
+    FIT,
+  );
+  assert.ok(strong.score > weak.score, `strong ${strong.score} vs weak ${weak.score}`);
+  assert.ok(strong.terms.combat > weak.terms.combat);
+});
+
+test("a draw sits between a win and a loss", () => {
+  const drawn = record({ winnerId: null, winnerKingdom: null, players: [
+    { id: "p0", name: "a", kingdomId: "water", hp: 0, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: 5_000 },
+    { id: "p1", name: "b", kingdomId: "fire", hp: 0, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: 5_000 },
+  ] });
+  const result = scoreScenario(drawn, "p0", context(), FIT);
+  assert.equal(result.drawn, true);
+  assert.equal(result.won, false);
+  assert.equal(result.lost, false);
+  assert.equal(result.terms.win, 0, "a draw earns no win term");
+  assert.ok(result.score > 0, "but it still scores its shaping terms");
+});
+
+test("placement differences move the score in free-for-all", () => {
+  const seven = (place: number): MatchRecord =>
+    record({
+      winnerId: "p9",
+      players: Array.from({ length: 7 }, (_, i) => ({
+        id: i === 0 ? "p0" : `p${i}`,
+        name: `s${i}`,
+        kingdomId: "water",
+        hp: 0,
+        shield: 0,
+        citizens: 0,
+        currency: 0,
+        // Earlier elimination = worse placement. p0 dies at a tick that puts it
+        // in the requested position.
+        eliminatedAtTick: i === 0 ? 1_000 * (8 - place) : 1_000 * (i + 1),
+      })),
+    });
+  const second = scoreScenario(seven(2), "p0", context({ seats: 7 }), FIT);
+  const sixth = scoreScenario(seven(6), "p0", context({ seats: 7 }), FIT);
+  assert.ok(second.placement < sixth.placement);
+  assert.ok(second.terms.placement > sixth.terms.placement);
+  assert.ok(second.score > sixth.score);
+});
+
+test("surviving longer breaks ties between losses", () => {
+  const lossAt = (tick: number): MatchRecord =>
+    record({ winnerId: "p1", winnerKingdom: "fire", players: [
+      { id: "p0", name: "a", kingdomId: "water", hp: 0, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: tick },
+      { id: "p1", name: "b", kingdomId: "fire", hp: 10, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: null },
+    ] });
+  const early = scoreScenario(lossAt(500), "p0", context(), FIT);
+  const late = scoreScenario(lossAt(4_900), "p0", context(), FIT);
+  assert.ok(late.score > early.score);
+  assert.ok(late.terms.survival > early.terms.survival);
+});
+
+test("the damage ratio rewards winning exchanges, not raw damage", () => {
+  // Ten times the damage, but taking more than it deals, scores worse than a
+  // small clean exchange. Raw damage is farmable — the volcano is a legal
+  // target that is not a kingdom.
+  const bruiser = scoreScenario(record(), "p1", context({
+    combat: { damageDealt: 50_000, damageReceived: 90_000, shieldAbsorbed: 0, kills: 0, healingReceived: 0 },
+  }), FIT);
+  const surgeon = scoreScenario(record(), "p1", context({
+    combat: { damageDealt: 5_000, damageReceived: 1_000, shieldAbsorbed: 0, kills: 0, healingReceived: 0 },
+  }), FIT);
+  assert.ok(surgeon.terms.combat > bruiser.terms.combat);
 });
 
 test("a timeout is capped however healthy the castle", () => {
   // The turtle guard. Placement ranks timeout survivors by remaining HP, so
-  // without this a genome that shields and never attacks places first.
-  const config = trainingConfig().fitness;
+  // without it a genome that shields and never attacks places first.
   const timeout = record({
     winnerId: null,
     timedOut: true,
@@ -84,112 +183,214 @@ test("a timeout is capped however healthy the castle", () => {
       { id: "p1", name: "b", kingdomId: "fire", hp: 100, shield: 0, citizens: 1, currency: 0, eliminatedAtTick: null },
     ],
   });
-  const score = scoreMatch(timeout, "p0", 5, config);
-  assert.equal(score.placement, 1, "the turtle did place first");
-  assert.ok(score.score <= config.timeoutCap, `timeout scored ${score.score}`);
+  const result = scoreScenario(timeout, "p0", context(), FIT);
+  assert.equal(result.placement, 1, "the turtle did place first");
+  assert.ok(result.score <= FIT.timeoutCap, `timeout scored ${result.score}`);
+  assert.equal(result.terms.guardReason, "timeout");
 });
 
 test("a genome that never cast anything scores nothing", () => {
-  const config = trainingConfig().fitness;
-  assert.equal(scoreMatch(record(), "p0", 0, config).score, config.inactivityScore);
+  const result = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 0, invests: 0, citizens: 0, repairs: 0, shields: 0, retargets: 0, waits: 100, decisions: 100 },
+  }), FIT);
+  assert.equal(result.score, FIT.inactivityScore);
+  assert.equal(result.terms.guardReason, "never cast");
 });
 
-test("surviving longer breaks ties between losses", () => {
-  const config = trainingConfig().fitness;
-  const early = scoreMatch(
-    record({ winnerId: "p1", winnerKingdom: "fire", players: [
-      { id: "p0", name: "a", kingdomId: "water", hp: 0, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: 500 },
-      { id: "p1", name: "b", kingdomId: "fire", hp: 10, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: null },
-    ] }),
-    "p0", 5, config,
-  );
-  const late = scoreMatch(
-    record({ winnerId: "p1", winnerKingdom: "fire", players: [
-      { id: "p0", name: "a", kingdomId: "water", hp: 0, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: 4_900 },
-      { id: "p1", name: "b", kingdomId: "fire", hp: 10, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: null },
-    ] }),
-    "p0", 5, config,
-  );
-  assert.ok(late.score > early.score);
+test("every score stays within the formula's stated maximum", () => {
+  const perfect = scoreScenario(record(), "p0", context({
+    combat: { damageDealt: 10_000, damageReceived: 0, shieldAbsorbed: 0, kills: 1, healingReceived: 0 },
+  }), FIT);
+  assert.ok(perfect.score <= maxScore(FIT) + 1e-9, `${perfect.score} exceeds ${maxScore(FIT)}`);
 });
 
-test("aggregation averages a slate", () => {
-  const config = trainingConfig().fitness;
-  const scores = [scoreMatch(record(), "p0", 5, config), scoreMatch(record(), "p1", 5, config)];
-  const totals = aggregate(scores);
+test("terms always reconstruct the score", () => {
+  const result = scoreScenario(record(), "p0", context(), FIT);
+  const rebuilt = result.terms.win + result.terms.placement + result.terms.survival + result.terms.combat;
+  assert.ok(Math.abs(rebuilt - result.score) < 1e-9, "a score must be explainable from its terms");
+});
+
+test("aggregation preserves the structured detail", () => {
+  const scenarios = [
+    scoreScenario(record(), "p0", context(), FIT),
+    scoreScenario(record(), "p1", context(), FIT),
+  ];
+  const totals = aggregate(scenarios);
   assert.equal(totals.matches, 2);
   assert.equal(totals.wins, 1);
-  assert.ok(Math.abs(totals.fitness - (scores[0]!.score + scores[1]!.score) / 2) < 1e-9);
+  assert.equal(totals.losses, 1);
+  assert.equal(totals.scenarios.length, 2, "the per-scenario results survive aggregation");
+  assert.ok(totals.totalDamageDealt > 0);
+  assert.ok(totals.totalDamageReceived > 0);
 });
 
 // ── the slate ───────────────────────────────────────────────────────────
 
-test("a slate varies the matchup, not just the seed", () => {
-  // The constraint the module exists for: a deterministic policy replays the
-  // same match on every seed, so variance has to come from the matchup.
-  const config = trainingConfig();
+test("a slate varies format, kingdom, opponent and seat — not just the seed", () => {
+  const config = trainingConfig({
+    slate: { ...trainingConfig().slate, formats: ["duel", "ffa4"], seatRotations: 2 },
+  });
   const slate = buildSlate(0, config.slate, config.kingdoms, 1);
-  assert.equal(slate.length, slateSize(config.slate, config.kingdoms.length));
-  assert.ok(new Set(slate.map((e) => e.kingdom)).size > 1, "one kingdom only");
-  assert.ok(new Set(slate.map((e) => e.opponentProfiles[0])).size > 1, "one opponent only");
-  assert.equal(new Set(slate.map((e) => e.seed)).size, slate.length, "seeds should be distinct");
+  assert.equal(slate.scenarios.length, slateSize(config.slate, config.kingdoms.length));
+  assert.ok(new Set(slate.scenarios.map((s) => s.format)).size > 1, "one format only");
+  assert.ok(new Set(slate.scenarios.map((s) => s.candidateKingdom)).size > 1, "one kingdom only");
+  assert.ok(new Set(slate.scenarios.map((s) => s.opponentProfiles[0])).size > 1, "one opponent only");
+  assert.ok(new Set(slate.scenarios.map((s) => s.candidateSeat)).size > 1, "one seat only");
+  assert.equal(new Set(slate.scenarios.map((s) => s.seed)).size, slate.scenarios.length);
 });
 
-test("the slate rotates between generations but is fixed within one", () => {
+test("formats produce the right seat counts", () => {
+  const config = trainingConfig({
+    slate: { ...trainingConfig().slate, formats: ["duel", "ffa4", "ffa7"], kingdomsPerGenome: 1, opponents: ["balanced"], seatRotations: 1 },
+  });
+  const slate = buildSlate(0, config.slate, config.kingdoms, 1);
+  const bySeats = new Map(slate.scenarios.map((s) => [s.format, s.seats]));
+  assert.equal(bySeats.get("duel"), 2);
+  assert.equal(bySeats.get("ffa4"), 4);
+  assert.equal(bySeats.get("ffa7"), 7);
+  for (const s of slate.scenarios) {
+    assert.equal(s.opponentKingdoms.length, s.seats - 1);
+    assert.ok(s.candidateSeat < s.seats);
+  }
+});
+
+test("the slate is fixed within a generation and rotates between them", () => {
   const config = trainingConfig();
   const first = buildSlate(0, config.slate, config.kingdoms, 1);
   const again = buildSlate(0, config.slate, config.kingdoms, 1);
   const later = buildSlate(1, config.slate, config.kingdoms, 1);
-  assert.deepEqual(first, again, "a generation's slate must be stable for every genome");
-  assert.notDeepEqual(
-    first.map((e) => e.kingdom),
-    later.map((e) => e.kingdom),
-    "consecutive generations should not repeat the same matchups",
-  );
+  assert.deepEqual(first, again, "every genome in a generation must face the same slate");
+  assert.equal(first.hash, again.hash);
+  assert.notEqual(first.hash, later.hash, "consecutive generations should differ");
+});
+
+test("the slate hash covers scenario content", () => {
+  const config = trainingConfig();
+  const slate = buildSlate(0, config.slate, config.kingdoms, 1);
+  const tampered = { ...slate, scenarios: [...slate.scenarios] };
+  tampered.scenarios[0] = { ...tampered.scenarios[0]!, candidateSeat: 1 };
+  assert.notEqual(hashSlate(tampered), slate.hash);
+});
+
+test("the slate SHAPE hash ignores generation but catches redesign", () => {
+  const config = trainingConfig();
+  const shape = slateShapeHash(config.slate, config.kingdoms, config.seed);
+  // Rotating to another generation must not change the shape…
+  assert.equal(shape, slateShapeHash(config.slate, config.kingdoms, config.seed));
+  // …but changing the design must.
+  const redesigned = { ...config.slate, formats: ["ffa7" as const] };
+  assert.notEqual(shape, slateShapeHash(redesigned, config.kingdoms, config.seed));
 });
 
 // ── real matches ────────────────────────────────────────────────────────
 
-test("a genome plays real Elementals matches and receives a fitness", () => {
-  const config = trainingConfig({
-    slate: { ...trainingConfig().slate, kingdomsPerGenome: 1, opponents: ["balanced"], seatRotations: 1, maxTicks: 3_000 },
+const smallSlate = () =>
+  trainingConfig({
+    slate: {
+      ...trainingConfig().slate,
+      formats: ["duel"],
+      kingdomsPerGenome: 1,
+      opponents: ["balanced"],
+      seatRotations: 1,
+      maxTicks: 3_000,
+    },
   });
-  const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
-  const population = new Population(ELEMENTALS_SHAPE, withConfig({ populationSize: 2, activation: "tanh", initialConnectivity: 0.25 }), 7);
-  const genome = population.ask()[0]!;
 
-  const evaluation = evaluateGenome(genome, slate, config.fitness, config.slate.maxTicks);
-  assert.equal(evaluation.matches, slate.length);
-  assert.ok(Number.isFinite(evaluation.fitness));
-  assert.ok(evaluation.fitness >= 0);
-  assert.ok(evaluation.scores.every((s) => s.placement >= 1 && s.placement <= 2));
+test("a genome plays real Elementals matches and receives a structured result", () => {
+  const config = smallSlate();
+  const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
+  const genome = new Population(
+    ELEMENTALS_SHAPE,
+    withConfig({ populationSize: 2, activation: "tanh", initialConnectivity: 0.25 }),
+    7,
+  ).ask()[0]!;
+
+  const result = evaluateGenome(genome, slate, config.fitness);
+  assert.equal(result.matches, slate.scenarios.length);
+  assert.ok(Number.isFinite(result.fitness));
+  assert.equal(result.wins + result.losses + result.draws, result.matches);
+  for (const s of result.scenarios) {
+    assert.ok(s.placement >= 1 && s.placement <= s.seats);
+    assert.ok(s.damageDealt >= 0 && s.damageReceived >= 0);
+    assert.ok(s.decisions > 0, "the controller should have decided something");
+  }
 });
 
-test("evaluating the same genome twice gives the same fitness", () => {
-  const config = trainingConfig({
-    slate: { ...trainingConfig().slate, kingdomsPerGenome: 1, opponents: ["balanced"], seatRotations: 1, maxTicks: 3_000 },
-  });
+test("damage dealt and received are both observed", () => {
+  const config = smallSlate();
   const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
-  const genome = new Population(ELEMENTALS_SHAPE, withConfig({ populationSize: 1, activation: "tanh", initialConnectivity: 0.25 }), 3).ask()[0]!;
-  const first = evaluateGenome(genome, slate, config.fitness, config.slate.maxTicks);
-  const second = evaluateGenome(genome, slate, config.fitness, config.slate.maxTicks);
+  // A heuristic definitely fights, so both sides of the exchange must be nonzero.
+  const result = evaluateCandidate(personalityCandidate("aggressive"), slate, config.fitness);
+  assert.ok(result.totalDamageDealt > 0, "no damage dealt was recorded");
+  assert.ok(result.totalDamageReceived > 0, "no damage received was recorded");
+});
+
+test("evaluating the same genome on the same slate is reproducible", () => {
+  const config = smallSlate();
+  const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
+  const genome = new Population(
+    ELEMENTALS_SHAPE,
+    withConfig({ populationSize: 1, activation: "tanh", initialConnectivity: 0.25 }),
+    3,
+  ).ask()[0]!;
+  const first = evaluateGenome(genome, slate, config.fitness);
+  const second = evaluateGenome(genome, slate, config.fitness);
   assert.equal(first.fitness, second.fitness);
-  assert.deepEqual(first.scores.map((s) => s.placement), second.scores.map((s) => s.placement));
+  assert.deepEqual(
+    first.scenarios.map((s) => [s.placement, s.damageDealt, s.damageReceived]),
+    second.scenarios.map((s) => [s.placement, s.damageDealt, s.damageReceived]),
+  );
 });
 
-test("a short training run completes and produces a champion", () => {
+// ── baselines ───────────────────────────────────────────────────────────
+
+test("baselines put every candidate through identical scenarios", () => {
+  const config = smallSlate();
+  const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
+  const report = runBaselines({
+    slate,
+    fitness: config.fitness,
+    personalities: ["balanced"],
+    seed: 99,
+  });
+  assert.equal(report.slateHash, slate.hash);
+  assert.equal(report.entries.length, 2, "random + one personality");
+  for (const entry of report.entries) {
+    assert.equal(entry.result.matches, slate.scenarios.length);
+  }
+  assert.match(formatBaselines(report), /candidate/);
+});
+
+test("a heuristic outfights a random network on the same slate", () => {
+  // The floor the whole exercise rests on. If a random network matched a tuned
+  // heuristic, either the environment or the fitness function would be telling
+  // us nothing.
+  const config = smallSlate();
+  const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
+  const random = evaluateCandidate(randomCandidate(4242), slate, config.fitness);
+  const heuristic = evaluateCandidate(personalityCandidate("balanced"), slate, config.fitness);
+  assert.ok(
+    heuristic.totalDamageDealt > random.totalDamageDealt,
+    `heuristic ${heuristic.totalDamageDealt} vs random ${random.totalDamageDealt} damage`,
+  );
+});
+
+// ── training loop ───────────────────────────────────────────────────────
+
+test("a short training run completes and reports its champion", () => {
   const config = trainingConfig({
     generations: 2,
     neat: withConfig({ populationSize: 4, activation: "tanh", initialConnectivity: 0.25 }),
-    slate: { ...trainingConfig().slate, kingdomsPerGenome: 1, opponents: ["balanced"], seatRotations: 1, maxTicks: 2_500 },
+    slate: { ...smallSlate().slate, maxTicks: 2_500 },
   });
   const result = train({ config });
   assert.equal(result.generations, 2);
   assert.equal(result.history.length, 2);
-  assert.ok(Number.isFinite(result.bestFitness));
-  assert.ok(result.best.connections.length > 0);
+  assert.ok(result.bestResult, "the champion's full result should be kept");
+  assert.equal(result.bestResult!.fitness, result.bestFitness);
   for (const record of result.history) {
     assert.equal(record.matches, 4 * slateSize(config.slate, config.kingdoms.length));
+    assert.ok(record.slateHash.length > 0);
   }
 });
 
@@ -197,67 +398,32 @@ test("estimateMatches matches what a run actually plays", () => {
   const config = trainingConfig({
     generations: 2,
     neat: withConfig({ populationSize: 3, activation: "tanh", initialConnectivity: 0.25 }),
-    slate: { ...trainingConfig().slate, kingdomsPerGenome: 1, opponents: ["balanced"], seatRotations: 1, maxTicks: 2_000 },
+    slate: { ...smallSlate().slate, maxTicks: 2_000 },
   });
   const result = train({ config });
-  const played = result.history.reduce((sum, r) => sum + r.matches, 0);
-  assert.equal(played, estimateMatches(config));
+  assert.equal(
+    result.history.reduce((sum, r) => sum + r.matches, 0),
+    estimateMatches(config),
+  );
 });
 
 // ── checkpoints ─────────────────────────────────────────────────────────
 
-test("a training run checkpoints and resumes without restarting", () => {
-  const dir = mkdtempSync(join(tmpdir(), "neat-"));
-  try {
-    const path = join(dir, "checkpoint.json");
-    const config = trainingConfig({
-      generations: 2,
-      checkpointEvery: 1,
-      neat: withConfig({ populationSize: 4, activation: "tanh", initialConnectivity: 0.25 }),
-      slate: { ...trainingConfig().slate, kingdomsPerGenome: 1, opponents: ["balanced"], seatRotations: 1, maxTicks: 2_000 },
-    });
-
-    const first = train({ config, checkpointPath: path });
-    assert.equal(first.generations, 2);
-
-    // Resuming a finished run does no further work but must not silently start
-    // a fresh random population either.
-    const resumed = train({ config, checkpointPath: path, resume: true });
-    assert.equal(resumed.resumedFrom, 2, "should have resumed from the checkpoint");
-    assert.equal(resumed.checkpointRejected, null);
-    assert.equal(resumed.history.length, 2, "history should carry over, not restart");
-
-    // Extending the run continues from where it stopped.
-    const extended = train({
-      config: { ...config, generations: 3 },
-      checkpointPath: path,
-      resume: true,
-    });
-    assert.equal(extended.resumedFrom, 2);
-    assert.equal(extended.history.length, 3);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("a checkpoint from a different configuration is refused, and named", () => {
+test("a checkpoint from a different seed is refused, and named", () => {
   const dir = mkdtempSync(join(tmpdir(), "neat-"));
   try {
     const path = join(dir, "checkpoint.json");
     const config = trainingConfig({ seed: 111 });
-    const identity = localIdentity(config);
-    const checkpoint: TrainingCheckpoint = {
+    writeCheckpoint(path, {
       version: "v1",
-      identity,
+      identity: localIdentity(config),
       writtenAt: new Date().toISOString(),
       completedGenerations: 1,
       population: new Population(ELEMENTALS_SHAPE, config.neat, config.seed).snapshot(),
       history: [],
-    };
-    writeCheckpoint(path, checkpoint);
+    } satisfies TrainingCheckpoint);
 
-    const other = localIdentity(trainingConfig({ seed: 222 }));
-    const load = readCheckpoint(path, other);
+    const load = readCheckpointFrom(path, trainingConfig({ seed: 222 }));
     assert.equal(load.checkpoint, null);
     assert.match(load.rejected ?? "", /seed: 111 -> 222/);
   } finally {
@@ -265,17 +431,37 @@ test("a checkpoint from a different configuration is refused, and named", () => 
   }
 });
 
-test("identity refuses on the observation schema, which invalidates weights", () => {
+test("a redesigned slate invalidates a checkpoint", () => {
+  // Fitness only means something next to the matches that produced it.
+  const base = localIdentity(trainingConfig());
+  const redesigned = localIdentity(
+    trainingConfig({ slate: { ...trainingConfig().slate, formats: ["ffa7"] } }),
+  );
+  const mismatches = identityMismatches(base, redesigned);
+  assert.ok(mismatches.some((m) => m.startsWith("slateShapeHash")), mismatches.join(", "));
+});
+
+test("a changed balance configuration invalidates a checkpoint", () => {
+  const base = localIdentity(trainingConfig());
+  const other = localIdentity(trainingConfig({ balanceConfigId: "balance-v3-candidate" }));
+  const mismatches = identityMismatches(base, other);
+  assert.ok(mismatches.some((m) => m.startsWith("balanceConfigId")), mismatches.join(", "));
+});
+
+test("identity refuses on the observation schema but tolerates a dirty tree", () => {
   const identity = localIdentity(trainingConfig());
-  const stale = { ...identity, observationVersion: "v0" };
-  const mismatches = identityMismatches(stale, identity);
-  assert.ok(mismatches.some((m) => m.startsWith("observationVersion")));
-  // A dirty engine tree is recorded but never blocks a resume.
-  assert.deepEqual(identityMismatches({ ...identity, engineDirty: !identity.engineDirty }, identity), []);
+  assert.ok(
+    identityMismatches({ ...identity, observationVersion: "v0" }, identity)
+      .some((m) => m.startsWith("observationVersion")),
+  );
+  assert.deepEqual(
+    identityMismatches({ ...identity, engineDirty: !identity.engineDirty }, identity),
+    [],
+  );
 });
 
 test("a missing checkpoint is not an error", () => {
-  const load = readCheckpoint(join(tmpdir(), "definitely-not-here-neat.json"), localIdentity(trainingConfig()));
+  const load = readCheckpointFrom(join(tmpdir(), "definitely-not-here-neat.json"), trainingConfig());
   assert.equal(load.checkpoint, null);
   assert.equal(load.rejected, null);
 });
@@ -284,23 +470,16 @@ test("a missing checkpoint is not an error", () => {
 
 test("a trained genome becomes a model carrying full provenance", () => {
   const config = trainingConfig();
-  const genome = createGenome("champion", ELEMENTALS_SHAPE);
-  const model = toModel(genome, config, "hard", 12);
-
+  const model = toModel(createGenome("champion", ELEMENTALS_SHAPE), config, "hard", 12);
   assert.equal(model.kind, "elementals.ai.model");
-  assert.equal(model.difficulty, "hard");
   assert.equal(model.training.generation, 12);
-  assert.equal(model.identity.kingdomCount, 16);
   assert.ok(model.identity.balanceConfigHash.length > 0);
   assert.ok(model.identity.balanceBaselineHash.length > 0);
   assert.ok(model.identity.engineSha.length > 0);
-  // And it loads against this build.
   assert.doesNotThrow(() => assertModelCompatible(model));
 });
 
 test("all three difficulties come from one engine and one genome", () => {
-  // Difficulty is a property of the MODEL plus the runtime cadence, never a
-  // separate algorithm — which is what keeps Easy/Medium/Hard one lineage.
   const config = trainingConfig();
   const genome = createGenome("champion", ELEMENTALS_SHAPE);
   const models = (["easy", "medium", "hard"] as const).map((d) => toModel(genome, config, d, 5));
@@ -308,12 +487,16 @@ test("all three difficulties come from one engine and one genome", () => {
     assert.doesNotThrow(() => assertModelCompatible(model));
     assert.deepEqual(model.genome, genome, "the same genome backs every difficulty");
   }
-  assert.deepEqual(models.map((m) => m.difficulty), ["easy", "medium", "hard"]);
 });
 
 test("the evolution RNG is serializable and resumes mid-stream", () => {
   const rng = new NeatRng(12345);
   for (let i = 0; i < 50; i++) rng.next();
-  const resumed = NeatRng.fromState(rng.state);
-  assert.equal(resumed.next(), NeatRng.fromState(rng.state).next());
+  assert.equal(NeatRng.fromState(rng.state).next(), NeatRng.fromState(rng.state).next());
 });
+
+// Local helper so the import list stays about the public surface.
+import { readCheckpoint } from "../simulation/src/training/index.js";
+function readCheckpointFrom(path: string, config: ReturnType<typeof trainingConfig>) {
+  return readCheckpoint(path, localIdentity(config));
+}

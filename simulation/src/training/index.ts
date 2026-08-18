@@ -7,28 +7,60 @@
  */
 
 export {
-  AI_FITNESS_VERSION,
+  trainingConfig,
   DEFAULT_FITNESS,
   DEFAULT_SLATE,
-  trainingConfig,
   type FitnessConfig,
   type SlateConfig,
   type TrainingConfig,
 } from "./config.js";
+
 export {
+  AI_FITNESS_VERSION,
   aggregate,
+  maxScore,
   placementOf,
-  scoreMatch,
-  type GenomeFitness,
-  type MatchScore,
+  scoreScenario,
+  type FitnessTerms,
+  type ScenarioContext,
+  type ScenarioResult,
+  type TrainingResult,
 } from "./fitness.js";
-export { buildSlate, slateSize, type SlateEntry } from "./slate.js";
+
+export {
+  FORMAT_SEATS,
+  SLATE_VERSION,
+  buildSlate,
+  hashSlate,
+  slateShapeHash,
+  slateSize,
+  type MatchFormat,
+  type Slate,
+  type SlateScenario,
+} from "./slate.js";
+
+export { CombatObserver, type SeatCombat } from "./matchObserver.js";
+
 export {
   ELEMENTALS_SHAPE,
+  evaluateCandidate,
   evaluateGenome,
-  playMatch,
-  type GenomeEvaluation,
+  networkCandidate,
+  personalityCandidate,
+  playScenario,
+  type Candidate,
 } from "./matchEvaluator.js";
+
+export {
+  formatBaselines,
+  minimalGenomeCandidate,
+  randomCandidate,
+  runBaselines,
+  type BaselineEntry,
+  type BaselineOptions,
+  type BaselineReport,
+} from "./baselines.js";
+
 export {
   TRAINING_CHECKPOINT_VERSION,
   identityMismatches,
@@ -39,6 +71,7 @@ export {
   type TrainingCheckpoint,
   type TrainingIdentity,
 } from "./checkpoint.js";
+
 export {
   estimateMatches,
   toModel,
@@ -46,5 +79,5 @@ export {
   writeModel,
   type GenerationRecord,
   type TrainOptions,
-  type TrainingResult,
+  type TrainingRunResult,
 } from "./trainer.js";

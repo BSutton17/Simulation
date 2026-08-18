@@ -1,6 +1,6 @@
 import { evaluate, balancedDuelPairings } from "../evaluation/index.js";
 import { scoreFitness, WEIGHT_PRESETS } from "../fitness/index.js";
-import { tierFor, type EvaluationTier } from "../search/index.js";
+import { tierFor, isAllocationVersion, type EvaluationTier } from "../search/index.js";
 import { QueueClient } from "./client.js";
 import { backoffMs, identityMismatches, makeWorkerId, type ExperimentIdentity, type JobRecord } from "./protocol.js";
 
@@ -106,6 +106,21 @@ export async function assertWorkerMatches(
     throw new Error(
       `this worker does not match experiment ${experimentId}:\n  ${mismatches.join("\n  ")}\n` +
         `Refusing to evaluate. Rebuild from the same commit as the coordinator.`,
+    );
+  }
+
+  // The allocation is adopted from the experiment rather than compared against
+  // a local default — but only if this build actually implements it.
+  //
+  // A worker that cannot resolve the split would otherwise have to guess, and a
+  // wrong guess is invisible: it returns plausible scores measured on a
+  // different instrument and the search absorbs them without complaint. That is
+  // the hazard worth refusing over, and it is the one this catches.
+  if (!isAllocationVersion(remote.allocation)) {
+    throw new Error(
+      `experiment ${experimentId} uses allocation "${remote.allocation}", which this ` +
+        `worker's build does not implement. Refusing to evaluate: the match-budget ` +
+        `split decides what a score means. Rebuild from the same commit as the coordinator.`,
     );
   }
 }

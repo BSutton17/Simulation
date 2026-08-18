@@ -80,6 +80,19 @@ export function identityMismatches(
 ): string[] {
   const out: string[] = [];
   for (const key of Object.keys(experiment) as (keyof ExperimentIdentity)[]) {
+    // `allocation` is a property of the RUN, not of the build.
+    //
+    // Everything else here answers "is this worker the same code as the
+    // coordinator?" — engine, schema, catalog, fitness version. A worker can
+    // only be wrong about those by being built from a different commit.
+    //
+    // Allocation is chosen by the coordinator when it creates the experiment,
+    // and a worker from the identical commit serves whichever one it is told.
+    // Comparing it here meant a correctly-built worker was refused for not
+    // having guessed a value it had no way to know. The real hazard — a worker
+    // whose build does not understand the experiment's allocation at all — is
+    // checked in assertWorkerMatches, where it can be checked properly.
+    if (key === "allocation") continue;
     if (worker[key] !== experiment[key]) {
       out.push(`${key}: worker has ${String(worker[key])}, experiment expects ${String(experiment[key])}`);
     }

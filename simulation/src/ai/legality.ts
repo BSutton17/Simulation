@@ -72,9 +72,13 @@ export function legalActions(knowledge: PlayerKnowledge, mask: ActionMask): Acti
   // A single-enemy cast resolves against the CURRENT selection, so without one
   // the engine refuses with TARGET_REQUIRED. Same rule a player meets: click a
   // castle, then an ability.
+  //
+  // `attackable`, not merely alive: the engine applies its targeting bans to the
+  // current selection too, so a target that Flooded this seat is still selected
+  // and no longer castable at.
   const selected =
     knowledge.self.targetId !== null &&
-    knowledge.enemies.some((e) => e.id === knowledge.self.targetId && !e.eliminated);
+    knowledge.enemies.some((e) => e.id === knowledge.self.targetId && e.attackable);
 
   // ── casts (0–4) ───────────────────────────────────────────────────────
   let anyChargeCastable = false;

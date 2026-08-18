@@ -185,14 +185,31 @@ export function evaluateCandidate(
 ): TrainingResult {
   const scenarios: ScenarioResult[] = [];
   let rejected = 0;
+  const causes: Record<string, number> = {};
+  const where: string[] = [];
   for (const scenario of slate.scenarios) {
     scenarios.push(playScenario(candidate, scenario, config));
-    rejected += candidate.stats()?.rejected ?? 0;
+    const stats = candidate.stats();
+    if (stats && stats.rejected > 0) {
+      rejected += stats.rejected;
+      for (const [key, count] of Object.entries(stats.rejectedBy)) {
+        causes[key] = (causes[key] ?? 0) + count;
+      }
+      if (where.length < 5) where.push(scenario.id);
+    }
   }
   if (rejected > 0) {
     // The action mask and the engine disagreeing is a defect, not a strategy
-    // problem, and it would quietly distort every fitness number in the run.
-    throw new Error(`the engine refused ${rejected} action(s) the action mask permitted`);
+    // problem, and it would quietly distort every fitness number in the run —
+    // so it names what drifted rather than only that something did.
+    const detail = Object.entries(causes)
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, count]) => `${key} x${count}`)
+      .join(", ");
+    throw new Error(
+      `the engine refused ${rejected} action(s) the action mask permitted: ${detail}` +
+        ` (first scenarios: ${where.join(", ")})`,
+    );
   }
   return aggregate(scenarios);
 }

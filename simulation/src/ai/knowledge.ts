@@ -172,7 +172,23 @@ export interface EnemyKnowledge {
   readonly damageDealt: number;
   /** Ticks since this seat last damaged them; null if never. */
   readonly ticksSinceDamaged: number | null;
-  /** Whether this seat may currently aim at them. */
+  /**
+   * Whether a cast can RESOLVE against them right now.
+   *
+   * Distinct from `targetable`, and the distinction is load-bearing. The engine
+   * refuses a singleEnemy cast with INVALID_TARGET when the target is
+   * eliminated, targeting-blocked (Water's Flood bars aiming at its caster), or
+   * caprice-protected — and it applies those rules to the CURRENT selection, not
+   * only to a new one. A mask that checked merely "alive" let a genome keep
+   * casting into a Flood for the whole of its duration; that produced 70 refused
+   * actions in one match and stopped a training run dead.
+   */
+  readonly attackable: boolean;
+  /**
+   * Whether this seat may SELECT them. Everything `attackable` requires, plus
+   * the selection-only rules — Insects' Caprice refuses manual selection while
+   * it holds the field, but does not stop a cast at an already-chosen target.
+   */
   readonly targetable: boolean;
   /**
    * How much harder this seat's attacks land on them (1 = neither resisted nor
@@ -574,12 +590,17 @@ export function knowledgeFor(
       income: reveal ? known(enemy.economy.incomePerTick) : UNKNOWN_NUMBER,
       damageDealt: history.damageDealtTo(enemy.id),
       ticksSinceDamaged: history.ticksSinceDamaged(enemy.id, tick),
+      attackable:
+        !enemy.eliminated &&
+        match.hasPlayer(enemy.id) &&
+        !isTargetingBlocked(player, enemy.id) &&
+        !capriceProtects(match, enemy.id),
       targetable:
         !enemy.eliminated &&
         match.hasPlayer(enemy.id) &&
         !isTargetingBlocked(player, enemy.id) &&
-        !capriceScrambles(match, player) &&
-        !capriceProtects(match, enemy.id),
+        !capriceProtects(match, enemy.id) &&
+        !capriceScrambles(match, player),
       amplification: publicAmplification(attackElements, enemy.kingdomId),
       comboSetup: statusIds.some((id) => payoffStatuses.has(id)),
     };

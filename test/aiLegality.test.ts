@@ -247,3 +247,55 @@ test("charge fraction is masked off for the fifteen kingdoms without charges", (
     }
   }
 });
+
+test("a cast is refused when the current target has barred this seat from aiming at it", () => {
+  // Regression. The engine applies its targeting bans to the CURRENT selection,
+  // not only to a new one: Water's Flood bars its victim from aiming at Water,
+  // and a seat that was already targeting Water stays targeting it. A mask that
+  // asked only "is the target alive" kept proposing casts the engine refused —
+  // 70 of them in a single match, which killed a training run at generation 4.
+  const f = fixture("water", true);
+  const before = maskFor(f);
+  const castable = before.findIndex(
+    (v, i) => i >= CAST_BASE && i < CAST_BASE + KIT_SLOTS && v === 1,
+  );
+  assert.ok(castable >= 0, "fixture should leave something castable");
+
+  // The current target applies a status barring this seat from targeting it.
+  f.me.statuses.push({
+    id: "flood",
+    sourceId: f.enemy.id,
+    remainingTicks: 200,
+    stacks: 1,
+    blocksTargetingSource: true,
+  });
+
+  const after = maskFor(f);
+  const kit = abilitiesForKingdom("water").filter((a) => a.kind !== "passive");
+  for (let slot = 0; slot < KIT_SLOTS; slot++) {
+    if (kit[slot]!.targeting.mode !== "singleEnemy") continue;
+    assert.equal(
+      after[CAST_BASE + slot],
+      0,
+      `${kit[slot]!.id} still offered while the target bars this seat`,
+    );
+  }
+});
+
+test("a barred target is neither attackable nor selectable", () => {
+  const f = fixture("water", true);
+  f.me.statuses.push({
+    id: "flood",
+    sourceId: f.enemy.id,
+    remainingTicks: 200,
+    stacks: 1,
+    blocksTargetingSource: true,
+  });
+  const knowledge = knowledgeFor(f.match, f.me, new ObservedHistory());
+  const barred = knowledge.enemies.find((e) => e.id === f.enemy.id)!;
+  assert.equal(barred.attackable, false);
+  assert.equal(barred.targetable, false);
+  // Other kingdoms are unaffected — the ban is per-source, not blanket.
+  const other = knowledge.enemies.find((e) => e.id !== f.enemy.id)!;
+  assert.equal(other.attackable, true);
+});

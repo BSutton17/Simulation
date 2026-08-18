@@ -1,0 +1,123 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  ACTION_VERSION,
+  MODEL_FORMAT_VERSION,
+  ModelCompatibilityError,
+  OBSERVATION_VERSION,
+  assertModelCompatible,
+  modelMismatches,
+  observationSpecHash,
+  runtimeIdentity,
+  visibilitySpecHash,
+  type AiModel,
+} from "../simulation/src/ai/index.js";
+
+/**
+ * Version identity and its refusal.
+ *
+ * A model is a set of weights on SPECIFIC input and output indices. Changing
+ * what input 31 means does not degrade an old model, it turns it into a
+ * different function reading the same sixty-four numbers — one that plays
+ * confidently and wrongly with nothing raising an error. So loading is a gate,
+ * not a best effort.
+ */
+
+function model(overrides: Partial<AiModel["identity"]> = {}): AiModel {
+  return {
+    formatVersion: MODEL_FORMAT_VERSION,
+    kind: "elementals.ai.model",
+    difficulty: "hard",
+    identity: {
+      ...runtimeIdentity(),
+      engineSha: "36d9ce3eb0",
+      engineDirty: false,
+      balanceConfigHash: "baseline",
+      balanceBaselineHash: "abcd1234",
+      kingdomCount: 16,
+      ...overrides,
+    },
+    training: {
+      seed: 20260817,
+      generation: 0,
+      fitnessVersion: "v0",
+      trainedAt: "2026-08-17T00:00:00.000Z",
+    },
+    genome: null,
+  };
+}
+
+test("a matching model loads", () => {
+  assert.deepEqual(modelMismatches(model()), []);
+  assert.doesNotThrow(() => assertModelCompatible(model()));
+});
+
+test("a stale observation version is refused, and named", () => {
+  const stale = model({ observationVersion: "v0" });
+  assert.throws(
+    () => assertModelCompatible(stale),
+    (error: Error) => {
+      assert.ok(error instanceof ModelCompatibilityError);
+      assert.match(error.message, /observationVersion: v0 -> v1/);
+      return true;
+    },
+  );
+});
+
+test("a stale action version is refused", () => {
+  assert.throws(() => assertModelCompatible(model({ actionVersion: "v0" })), /actionVersion/);
+});
+
+test("balance and engine identity are refused when the caller supplies them", () => {
+  // `ai/` deliberately does not import the provenance machinery, so the caller
+  // passes what it knows. Both balance hashes are checked, because they catch
+  // different mistakes: a different candidate, and an uncommitted src/data edit.
+  const mismatches = modelMismatches(model(), {
+    engineSha: "deadbeef",
+    balanceConfigHash: "other",
+    balanceBaselineHash: "changed",
+  });
+  assert.equal(mismatches.length, 3);
+  assert.ok(mismatches.some((m) => m.startsWith("engineSha")));
+  assert.ok(mismatches.some((m) => m.startsWith("balanceConfigHash")));
+  assert.ok(mismatches.some((m) => m.startsWith("balanceBaselineHash")));
+});
+
+test("a wrong envelope version is refused", () => {
+  const wrong = { ...model(), formatVersion: 99 } as AiModel;
+  assert.throws(() => assertModelCompatible(wrong), /formatVersion/);
+});
+
+test("kingdom count is part of identity", () => {
+  // A seventeenth kingdom changes what the five kit slots mean.
+  assert.deepEqual(modelMismatches(model(), { kingdomCount: 17 }), [
+    "kingdomCount: 16 -> 17",
+  ]);
+});
+
+/**
+ * The pin.
+ *
+ * These hashes cover the observation layout AND the visibility rule. Widening
+ * what a seat may see changes `visibilitySpecHash`, which changes
+ * `observationSpecHash`, which fails here — forcing a deliberate
+ * OBSERVATION_VERSION bump instead of a silent change. That is the whole
+ * mechanism turning "remember to bump the version" into something enforced.
+ *
+ * If this test fails: decide whether the change was intended. If it was, bump
+ * OBSERVATION_VERSION and update these constants in the same commit.
+ */
+test("the observation and visibility specifications are pinned to v1", () => {
+  assert.equal(OBSERVATION_VERSION, "v1");
+  assert.equal(ACTION_VERSION, "v1");
+  assert.equal(
+    visibilitySpecHash(),
+    "920dc078",
+    "the visibility rule changed — a seat may now see something different",
+  );
+  assert.equal(
+    observationSpecHash(),
+    "6f7ae1fb",
+    "the observation contract changed — trained models are no longer valid",
+  );
+});

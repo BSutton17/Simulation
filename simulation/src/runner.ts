@@ -1,6 +1,6 @@
 import { withParameterSet } from "../../src/engine/parameters.js";
 import { DEFAULT_MAX_TICKS, runHeadlessMatch } from "./headless.js";
-import { createBaselineAI } from "./ai.js";
+import { createBaselineAI } from "./ai/baseline.js";
 import { deriveSeed, normalizeSeed } from "./rng.js";
 import type { MatchRecord, SimulationConfig, SimulationResult } from "./types.js";
 

@@ -13,7 +13,7 @@ export {
   runHeadlessMatch,
   DEFAULT_MAX_TICKS,
 } from "./headless.js";
-export { createBaselineAI } from "./ai.js";
+export { createBaselineAI } from "./ai/baseline.js";
 // AI decision framework (ticket #205) + personalities (ticket #206).
 export {
   PersonalityAI,

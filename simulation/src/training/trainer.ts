@@ -4,7 +4,7 @@ import { Population, cloneGenome, type GenerationReport, type Genome } from "../
 import { MODEL_FORMAT_VERSION, type AiModel, type Difficulty } from "../ai/index.js";
 import type { TrainingConfig } from "./config.js";
 import { ELEMENTALS_SHAPE, evaluateGenome } from "./matchEvaluator.js";
-import { buildSlate, slateSize, type Slate } from "./slate.js";
+import { buildSlate, buildValidationSlate, slateSize, type Slate } from "./slate.js";
 import type { TrainingResult } from "./fitness.js";
 import { AI_FITNESS_VERSION } from "./fitness.js";
 import {
@@ -37,6 +37,13 @@ export interface GenerationRecord extends GenerationReport {
   kills: number;
   casts: number;
   slateHash: string;
+  /**
+   * Champion fitness on the frozen validation slate, when one was run this
+   * generation. Null otherwise — never interpolated, because a made-up point on
+   * a generalisation curve is worse than a gap in it.
+   */
+  validationFitness: number | null;
+  validationWins: number | null;
   durationMs: number;
 }
 
@@ -105,6 +112,15 @@ export function train(options: TrainOptions): TrainingRunResult {
   // cloned complete with their parent's fitness, so asking the live population
   // for its best after a generation returns a genome whose recorded fitness was
   // measured on a different generation's slate.
+  // Built once and reused: frozen is the whole point, and rebuilding it per
+  // generation would invite it to drift.
+  const validationSlate =
+    config.validateEvery > 0
+      ? buildValidationSlate(config.kingdoms, config.balanceConfigId, {
+          maxTicks: config.slate.maxTicks,
+        })
+      : null;
+
   let champion: Genome | null = restoredChampion;
   let championGeneration: number | null = restoredChampionGeneration;
   // Only populated when the champion is found in THIS session: the per-scenario
@@ -140,6 +156,27 @@ export function train(options: TrainOptions): TrainingRunResult {
     const sum = (pick: (r: TrainingResult) => number): number =>
       results.reduce((total, r) => total + pick(r), 0);
 
+    // Validation runs on the CHAMPION only — one genome, not the population —
+    // so a broad slate stays affordable.
+    let validationFitness: number | null = null;
+    let validationWins: number | null = null;
+    // Scheduled purely by generation INDEX, never by position within the run.
+    // An earlier version also validated on the final generation, which made the
+    // schedule depend on config.generations — so a run stopped at 2 and resumed
+    // to 4 validated at different generations than one that ran straight
+    // through, and the recorded history diverged. Caught by the resume-
+    // equivalence test.
+    if (
+      validationSlate &&
+      champion !== null &&
+      config.validateEvery > 0 &&
+      generation % config.validateEvery === 0
+    ) {
+      const validated = evaluateGenome(champion, validationSlate, config.fitness);
+      validationFitness = validated.fitness;
+      validationWins = validated.wins;
+    }
+
     const record: GenerationRecord = {
       ...report,
       wins: sum((r) => r.wins),
@@ -154,6 +191,8 @@ export function train(options: TrainOptions): TrainingRunResult {
       kills: sum((r) => r.totalKills),
       casts: sum((r) => r.totalCasts),
       slateHash: slate.hash,
+      validationFitness,
+      validationWins,
       durationMs: Date.now() - generationStarted,
     };
     history.push(record);

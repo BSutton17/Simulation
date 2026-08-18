@@ -1,7 +1,7 @@
 import { runXor, withConfig, XOR_CONFIG } from "../neat/index.js";
 import { KINGDOM_IDS, type KingdomId } from "../../../src/data/kingdoms.js";
 import { trainingConfig, type TrainingConfig } from "./config.js";
-import { buildSlate, slateSize, type MatchFormat } from "./slate.js";
+import { buildSlate, buildValidationSlate, slateSize, slateSeatCost, type MatchFormat } from "./slate.js";
 import { estimateMatches, toModel, train, writeModel } from "./trainer.js";
 import { formatBaselines, runBaselines } from "./baselines.js";
 
@@ -50,6 +50,7 @@ function configFromFlags(defaults: { generations: number; population: number }):
   const base = trainingConfig();
   return trainingConfig({
     generations: flag("generations", defaults.generations),
+    validateEvery: flag("validate-every", 5),
     seed: flag("seed", 20260817),
     kingdoms,
     balanceConfigId: text("balance", "baseline"),
@@ -60,6 +61,7 @@ function configFromFlags(defaults: { generations: number; population: number }):
       kingdomsPerGenome: flag("kingdoms-per-genome", 2),
       opponents: text("opponents", "balanced,aggressive").split(","),
       seatRotations: flag("rotations", 1),
+      seedsPerScenario: flag("seeds", 1),
       maxTicks: flag("max-ticks", 8_000),
     },
   });
@@ -112,6 +114,13 @@ function trainCommand(): void {
       `opponents ${config.slate.opponents.join(",")}  ` +
       `balance ${config.balanceConfigId}`,
   );
+  const validation = buildValidationSlate(config.kingdoms, config.balanceConfigId, {
+    maxTicks: config.slate.maxTicks,
+  });
+  console.log(
+    `  validation: ${validation.scenarios.length} frozen scenarios ` +
+      `(${slateSeatCost(validation)} seats), champion only, every ${config.validateEvery} generations`,
+  );
   console.log(`  checkpoint: ${checkpointPath}${has("resume") ? " (resuming)" : ""}\n`);
 
   const started = Date.now();
@@ -128,6 +137,9 @@ function trainCommand(): void {
           `W/L/D ${record.wins}/${record.losses}/${record.draws}  ` +
           `timeouts ${String(record.timeouts).padStart(3)}  ` +
           `nodes ${record.meanNodes.toFixed(1)}  conns ${record.meanConnections.toFixed(0)}  ` +
+          (record.validationFitness !== null
+            ? `VAL ${record.validationFitness.toFixed(4)}  `
+            : "") +
           `${(record.durationMs / 1000).toFixed(1)}s`,
       );
     },
@@ -229,6 +241,9 @@ switch (command) {
         "  --resume               resume from the checkpoint if compatible",
         "  --model PATH           where to write the trained model",
         "  --baseline             compare the champion against baselines afterwards",
+        "  --validate-every N     champion vs the frozen validation slate (default 5)",
+        "  --seeds N              repeats per scenario on different seeds",
+        "  --hours N              stop cleanly at a generation boundary after N hours",
         "  --seed N               run seed",
       ].join("\n"),
     );

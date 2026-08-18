@@ -1,7 +1,7 @@
 import { configHash, type NeatConfig } from "./config.js";
 import { createGenome, type Genome, type GenomeShape, firstHiddenId } from "./genome.js";
 import { InnovationRegistry } from "./innovation.js";
-import { connectInitial, mutate } from "./mutation.js";
+import { connectInitial, initialTopology, mutate } from "./mutation.js";
 import { NeatRng } from "./rng.js";
 import {
   allocateOffspring,
@@ -77,9 +77,13 @@ export class Population {
    * wasted rediscovering variety.
    */
   private seedPopulation(): void {
+    // One topology, drawn once, shared by the whole population. Only the weights
+    // differ. Drawing it per genome makes generation 0 structurally noisy and
+    // leaves speciation nothing real to read — see `initialTopology`.
+    const edges = initialTopology(this.shape, this.config, this.rng, this.registry);
     for (let i = 0; i < this.config.populationSize; i++) {
       const genome = createGenome(this.nextGenomeId(), this.shape);
-      connectInitial(genome, this.shape, this.config, this.rng, this.registry);
+      connectInitial(genome, edges, this.config, this.rng);
       this.genomes.push(genome);
     }
   }

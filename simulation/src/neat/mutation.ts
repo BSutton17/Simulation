@@ -3,8 +3,11 @@ import type { ConnectionGene } from "./gene.js";
 import {
   addConnection,
   addNode,
+  biasNodeId,
   cloneGenome,
   hasConnection,
+  inputNodeId,
+  outputNodeId,
   type Genome,
   type GenomeShape,
 } from "./genome.js";
@@ -194,45 +197,66 @@ export function mutate(
   return child;
 }
 
-/** Seeds a starting genome's connections per `config.initialConnectivity`. */
-export function connectInitial(
-  genome: Genome,
+/**
+ * The topology every genome in a starting population shares.
+ *
+ * ⚠️ SHARED, not per-genome. Drawing an independent random subset for each
+ * genome looked harmless and was not: two genomes wired independently at
+ * density 0.25 share only 1430 x 0.25^2 ~ 89 genes, so roughly 500 genes are
+ * "disjoint" between any two members of generation 0. That is pure sampling
+ * noise, and it swamps the signal speciation exists to read — a measured
+ * add-node mutation moved compatibility distance by 0.006 against a baseline
+ * spread of 0.36, a signal-to-noise ratio of 0.016.
+ *
+ * Classic NEAT starts every genome with the SAME minimal topology and differing
+ * weights, so generation 0 is structurally identical and every later structural
+ * difference is something evolution actually did. This restores that.
+ */
+export function initialTopology(
   shape: GenomeShape,
   config: NeatConfig,
   rng: NeatRng,
   registry: InnovationRegistry,
-): void {
-  const sources = genome.nodes
-    .filter((n) => n.type === "input" || n.type === "bias")
-    .map((n) => n.id);
-  const outputs = genome.nodes.filter((n) => n.type === "output").map((n) => n.id);
-  const density = config.initialConnectivity === "full" ? 1 : config.initialConnectivity;
+): { from: number; to: number; innovation: number }[] {
+  const sources: number[] = [];
+  for (let i = 0; i < shape.inputs; i++) sources.push(inputNodeId(i));
+  sources.push(biasNodeId(shape));
+  const outputs: number[] = [];
+  for (let i = 0; i < shape.outputs; i++) outputs.push(outputNodeId(shape, i));
 
+  const density = config.initialConnectivity === "full" ? 1 : config.initialConnectivity;
+  const edges: { from: number; to: number; innovation: number }[] = [];
   for (const to of outputs) {
     let wired = false;
     for (const from of sources) {
       if (density < 1 && !rng.chance(density)) continue;
-      addConnection(genome, {
-        innovation: registry.connection(from, to),
-        from,
-        to,
-        weight: rng.spread(config.weightResetRange),
-        enabled: true,
-      });
+      edges.push({ from, to, innovation: registry.connection(from, to) });
       wired = true;
     }
-    // Every output needs at least one input, or it is a constant the search can
-    // never influence.
+    // Every output needs at least one source, or it emits a constant the search
+    // can never influence.
     if (!wired) {
       const from = rng.pick(sources);
-      addConnection(genome, {
-        innovation: registry.connection(from, to),
-        from,
-        to,
-        weight: rng.spread(config.weightResetRange),
-        enabled: true,
-      });
+      edges.push({ from, to, innovation: registry.connection(from, to) });
     }
   }
-  void shape;
+  return edges;
+}
+
+/** Applies a shared topology to one genome, with its own random weights. */
+export function connectInitial(
+  genome: Genome,
+  edges: readonly { from: number; to: number; innovation: number }[],
+  config: NeatConfig,
+  rng: NeatRng,
+): void {
+  for (const edge of edges) {
+    addConnection(genome, {
+      innovation: edge.innovation,
+      from: edge.from,
+      to: edge.to,
+      weight: rng.spread(config.weightResetRange),
+      enabled: true,
+    });
+  }
 }

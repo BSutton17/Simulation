@@ -16,6 +16,14 @@ export interface TrainingConfig {
   generations: number;
   /** Write a checkpoint every N generations (0 disables). */
   checkpointEvery: number;
+  /**
+   * Evaluate the champion against the FROZEN validation slate every N
+   * generations (0 disables).
+   *
+   * The only way to tell a policy that learned Elementals from one that learned
+   * its training slate. Costs one champion evaluation, not a population's.
+   */
+  validateEvery: number;
   /** Kingdoms the run may train on. */
   kingdoms: readonly KingdomId[];
   /**
@@ -40,6 +48,11 @@ export function trainingConfig(overrides: Partial<TrainingConfig> = {}): Trainin
       // output several times over.
       initialConnectivity: 0.25,
       targetSpecies: 6,
+      // The interface is 64 inputs and 22 outputs, so a brand-new genome already
+      // carries ~340 genes with no hidden nodes at all. Normalizing by that
+      // count divides every structural difference by the width of the problem
+      // and leaves speciation blind to topology; see the field's own note.
+      normalizeBySize: false,
       ...(overrides.neat ?? {}),
     }),
     slate: { ...DEFAULT_SLATE, ...(overrides.slate ?? {}) },
@@ -47,6 +60,7 @@ export function trainingConfig(overrides: Partial<TrainingConfig> = {}): Trainin
     seed: overrides.seed ?? 20260817,
     generations: overrides.generations ?? 30,
     checkpointEvery: overrides.checkpointEvery ?? 1,
+    validateEvery: overrides.validateEvery ?? 5,
     kingdoms: overrides.kingdoms ?? KINGDOM_IDS,
     balanceConfigId: overrides.balanceConfigId ?? "baseline",
   };

@@ -62,8 +62,13 @@ export function compatibility(a: Genome, b: Genome, config: NeatConfig): Distanc
   // Standard NEAT: small genomes are not normalized by size, because dividing a
   // two-gene difference by a gene count of three flattens every small genome
   // into every other and speciation stops separating anything.
+  //
+  // `normalizeBySize: false` extends that reasoning to a genome whose size is
+  // dominated by a fixed input/output interface rather than by evolved
+  // structure — see the note on the config field.
   const size = Math.max(aGenes.length, bGenes.length);
-  const normalizer = size < config.smallGenomeSize ? 1 : size;
+  const normalizer =
+    !config.normalizeBySize || size < config.smallGenomeSize ? 1 : size;
   const meanWeightDifference = matching > 0 ? weightDifference / matching : 0;
 
   const distance =

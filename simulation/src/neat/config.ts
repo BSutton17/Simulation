@@ -21,8 +21,27 @@ export interface NeatConfig {
    * Genomes smaller than this are not normalized by size. Standard NEAT sets
    * N = 1 for small genomes; dividing a two-gene difference by a gene count of
    * three makes every small genome look identical to every other.
+   *
+   * Ignored entirely when `normalizeBySize` is false.
    */
   smallGenomeSize: number;
+  /**
+   * Divide the excess and disjoint counts by genome size.
+   *
+   * ⚠️ FALSE for wide-interface problems, and the reason is measured rather than
+   * stylistic. NEAT normalizes by gene count so that two large, heavily-evolved
+   * genomes are not separated merely for being large. Here the gene count is not
+   * evolved structure at all — a 64-input, 22-output interface starts at ~340
+   * genes with ZERO hidden nodes. Dividing by it means one add-node mutation
+   * moves compatibility distance by 0.006 while ordinary weight variation moves
+   * it by 0.13, a signal-to-noise ratio of 0.04: speciation is mathematically
+   * blind to topology, and no threshold can fix that.
+   *
+   * With N = 1 the same mutation moves the distance by 2.0 against the same
+   * 0.13 of weight noise — a ratio of 15. That is the behaviour classic NEAT
+   * gets for free on small genomes via `smallGenomeSize`.
+   */
+  normalizeBySize: boolean;
   /**
    * Nudge the threshold each generation to steer toward `targetSpecies`.
    * 0 disables it and the threshold stays fixed.
@@ -78,6 +97,7 @@ export const DEFAULT_CONFIG: NeatConfig = {
   weightCoefficient: 0.4,
   compatibilityThreshold: 3,
   smallGenomeSize: 20,
+  normalizeBySize: true,
   compatibilityAdjust: 0.3,
   targetSpecies: 10,
 

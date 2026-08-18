@@ -244,6 +244,7 @@ test("a self-play run completes and keeps the absolute yardstick", () => {
     mode: "selfPlay",
     generations: 2,
     validateEvery: 1,
+    kingdoms: ["water", "fire", "earth"],
     neat: withConfig({ ...CONFIG.neat, populationSize: 8 }),
     selfPlay: { formats: ["duel"], roundsPerFormat: 1, hallOfFameShare: 0.15, maxTicks: 1_500 },
     slate: { ...CONFIG.slate, maxTicks: 1_500 },
@@ -257,4 +258,88 @@ test("a self-play run completes and keeps the absolute yardstick", () => {
     assert.ok(record.validationFitness !== null, "validation must still run");
   }
   assert.ok(result.history[1]!.hallOfFame > 0, "champions should accumulate");
+});
+
+test("the champion is selected by validation, not by a relative training score", () => {
+  // The defect this replaced: under self-play, training fitness depends on who a
+  // genome was drawn against, so "best ever" crowned a lucky draw at generation
+  // 11 of a 60-generation run and nothing could displace it — the number was
+  // never comparable to anything after it.
+  const config = trainingConfig({
+    mode: "selfPlay",
+    generations: 4,
+    validateEvery: 1,
+    validationCandidates: 2,
+    // The validation slate covers every kingdom in all three formats — 48
+    // matches per candidate per check. A three-kingdom roster keeps the same
+    // behaviour at a ninth of the cost.
+    kingdoms: ["water", "fire", "earth"],
+    neat: withConfig({ ...CONFIG.neat, populationSize: 6 }),
+    selfPlay: { formats: ["duel"], roundsPerFormat: 1, hallOfFameShare: 0, maxTicks: 1_200 },
+    slate: { ...CONFIG.slate, maxTicks: 1_200 },
+  });
+  const result = train({ config });
+
+  assert.ok(result.bestValidation !== null, "the champion must carry a validation score");
+  // The champion's recorded fitness IS its validation score, so it means the
+  // same thing in every generation.
+  assert.equal(result.bestFitness, result.bestValidation);
+
+  // And it is the best validation seen, never beaten by a later lower one.
+  const seen = result.history
+    .map((h) => h.validationFitness)
+    .filter((v): v is number => v !== null);
+  assert.ok(seen.length > 0);
+  assert.ok(
+    result.bestValidation >= Math.max(...seen) - 1e-9,
+    `champion ${result.bestValidation} below the best observed ${Math.max(...seen)}`,
+  );
+});
+
+test("the champion only improves", () => {
+  // Monotonic by construction: a new genome replaces the champion only when its
+  // validated score is higher. Without that, a run ends on whatever the last
+  // check happened to produce.
+  const config = trainingConfig({
+    mode: "selfPlay",
+    generations: 6,
+    validateEvery: 1,
+    validationCandidates: 2,
+    // The validation slate covers every kingdom in all three formats — 48
+    // matches per candidate per check. A three-kingdom roster keeps the same
+    // behaviour at a ninth of the cost.
+    kingdoms: ["water", "fire", "earth"],
+    neat: withConfig({ ...CONFIG.neat, populationSize: 6 }),
+    selfPlay: { formats: ["duel"], roundsPerFormat: 1, hallOfFameShare: 0, maxTicks: 1_200 },
+    slate: { ...CONFIG.slate, maxTicks: 1_200 },
+  });
+  const result = train({ config });
+  const validations = result.history
+    .map((h) => h.validationFitness)
+    .filter((v): v is number => v !== null);
+  assert.ok(result.bestValidation !== null);
+  for (const v of validations) {
+    assert.ok(
+      result.bestValidation >= v - 1e-9,
+      `a generation validated ${v}, above the champion ${result.bestValidation}`,
+    );
+  }
+});
+
+test("the Hall of Fame is seeded with validated champions", () => {
+  const config = trainingConfig({
+    mode: "selfPlay",
+    generations: 4,
+    validateEvery: 1,
+    validationCandidates: 2,
+    // The validation slate covers every kingdom in all three formats — 48
+    // matches per candidate per check. A three-kingdom roster keeps the same
+    // behaviour at a ninth of the cost.
+    kingdoms: ["water", "fire", "earth"],
+    neat: withConfig({ ...CONFIG.neat, populationSize: 6 }),
+    selfPlay: { formats: ["duel"], roundsPerFormat: 1, hallOfFameShare: 0.5, maxTicks: 1_200 },
+    slate: { ...CONFIG.slate, maxTicks: 1_200 },
+  });
+  const result = train({ config });
+  assert.ok(result.history[result.history.length - 1]!.hallOfFame > 0);
 });

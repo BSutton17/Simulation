@@ -63,6 +63,8 @@ export interface TrainingRunResult {
   bestFitness: number;
   /** Generation the champion was found in; survives a resume. */
   bestGeneration: number | null;
+  /** The champion's frozen-slate score — what it was selected by. */
+  bestValidation: number | null;
   /**
    * The champion's full per-scenario result.
    *
@@ -96,6 +98,7 @@ export function train(options: TrainOptions): TrainingRunResult {
   let restoredChampionGeneration: number | null = null;
   let restoredHall: { genome: Genome; generation: number }[] | null = null;
   let restoredLastAdmitted: string | null = null;
+  let restoredChampionValidation: number | null = null;
   let startGeneration = 0;
   let resumedFrom: number | null = null;
   let checkpointRejected: string | null = null;
@@ -112,6 +115,7 @@ export function train(options: TrainOptions): TrainingRunResult {
       restoredChampionGeneration = load.checkpoint.championGeneration;
       restoredHall = load.checkpoint.hallOfFame ?? null;
       restoredLastAdmitted = load.checkpoint.lastAdmitted ?? null;
+      restoredChampionValidation = load.checkpoint.championValidation ?? null;
     } else {
       population = new Population(ELEMENTALS_SHAPE, config.neat, config.seed);
     }
@@ -143,6 +147,11 @@ export function train(options: TrainOptions): TrainingRunResult {
 
   let champion: Genome | null = restoredChampion;
   let championGeneration: number | null = restoredChampionGeneration;
+  // The champion's score on the frozen slate — the metric it was chosen BY.
+  // Training fitness cannot serve here: under self-play it is relative to
+  // whoever a genome was drawn against, so "best ever" crowns a lucky draw and
+  // then nothing can displace it, because the number was never comparable.
+  let championValidation: number | null = restoredChampionValidation;
   // Only populated when the champion is found in THIS session: the per-scenario
   // detail is far too large to carry in a checkpoint, and the genome is what a
   // model actually needs.
@@ -178,53 +187,64 @@ export function train(options: TrainOptions): TrainingRunResult {
       matchesPlayed = results.reduce((sum, r) => sum + r.matches, 0);
     }
 
-    results.forEach((result, i) => {
-      if (champion === null || result.fitness > champion.fitness) {
-        const snapshot = cloneGenome(genomes[i]!);
-        snapshot.fitness = result.fitness;
-        champion = snapshot;
-        championGeneration = generation;
-        championResult = result;
-      }
-    });
-
-    // Admit this generation's best to the Hall of Fame. Done AFTER scoring so
-    // a champion never faces itself in the generation that produced it.
-    if (config.mode === "selfPlay") {
-      const bestIndex = results.reduce(
-        (best, r, i) => (r.fitness > results[best]!.fitness ? i : best),
-        0,
-      );
-      const candidate = genomes[bestIndex]!;
-      if (candidate.id !== lastAdmitted) {
-        hallOfFame.admit(cloneGenome(candidate), generation);
-        lastAdmitted = candidate.id;
-      }
+    // The Hall of Fame takes VALIDATED champions, not each generation's best
+    // training score — seeding it with lucky draws would anchor the run to noise
+    // rather than to strength.
+    if (config.mode === "selfPlay" && champion !== null && champion.id !== lastAdmitted) {
+      hallOfFame.admit(cloneGenome(champion), generation);
+      lastAdmitted = champion.id;
     }
 
     const report = population.tell(results.map((r) => r.fitness));
     const sum = (pick: (r: TrainingResult) => number): number =>
       results.reduce((total, r) => total + pick(r), 0);
 
-    // Validation runs on the CHAMPION only — one genome, not the population —
-    // so a broad slate stays affordable.
-    let validationFitness: number | null = null;
-    let validationWins: number | null = null;
+    // Validation both MEASURES and SELECTS.
+    //
+    // The generation's strongest few by training fitness go through the frozen
+    // slate, and the best validated one becomes champion if it beats the
+    // standing champion's own validated score. Training fitness cannot do this
+    // job under self-play: it is relative to whoever a genome was drawn
+    // against, so "best ever" crowned a lucky draw at generation 11 of a
+    // 60-generation run and nothing could displace it, because the number was
+    // never comparable to anything after it.
+    //
     // Scheduled purely by generation INDEX, never by position within the run.
     // An earlier version also validated on the final generation, which made the
     // schedule depend on config.generations — so a run stopped at 2 and resumed
     // to 4 validated at different generations than one that ran straight
     // through, and the recorded history diverged. Caught by the resume-
     // equivalence test.
-    if (
-      validationSlate &&
-      champion !== null &&
-      config.validateEvery > 0 &&
-      generation % config.validateEvery === 0
-    ) {
-      const validated = evaluateGenome(champion, validationSlate, config.fitness);
-      validationFitness = validated.fitness;
-      validationWins = validated.wins;
+    let validationFitness: number | null = null;
+    let validationWins: number | null = null;
+    if (validationSlate && config.validateEvery > 0 && generation % config.validateEvery === 0) {
+      const ranked = results
+        .map((result, index) => ({ fitness: result.fitness, index }))
+        .sort((a, b) => b.fitness - a.fitness || a.index - b.index)
+        .slice(0, Math.max(1, config.validationCandidates));
+
+      let bestGenome: Genome | null = null;
+      let bestResult: TrainingResult | null = null;
+      for (const { index } of ranked) {
+        const validated = evaluateGenome(genomes[index]!, validationSlate, config.fitness);
+        if (bestResult === null || validated.fitness > bestResult.fitness) {
+          bestGenome = genomes[index]!;
+          bestResult = validated;
+        }
+      }
+
+      if (bestGenome !== null && bestResult !== null) {
+        validationFitness = bestResult.fitness;
+        validationWins = bestResult.wins;
+        if (championValidation === null || bestResult.fitness > championValidation) {
+          const snapshot = cloneGenome(bestGenome);
+          snapshot.fitness = bestResult.fitness;
+          champion = snapshot;
+          championValidation = bestResult.fitness;
+          championGeneration = generation;
+          championResult = bestResult;
+        }
+      }
     }
 
     const record: GenerationRecord = {
@@ -264,6 +284,7 @@ export function train(options: TrainOptions): TrainingRunResult {
         history,
         champion,
         championGeneration,
+        championValidation,
         hallOfFame: hallOfFame.toJSON(),
         lastAdmitted,
       } satisfies TrainingCheckpoint);
@@ -279,6 +300,7 @@ export function train(options: TrainOptions): TrainingRunResult {
     best,
     bestFitness: best.fitness,
     bestGeneration: championGeneration,
+    bestValidation: championValidation,
     bestResult: championResult,
     resumedFrom,
     checkpointRejected,

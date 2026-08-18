@@ -79,6 +79,8 @@ export interface TrainingCheckpoint {
    */
   champion: Genome | null;
   championGeneration: number | null;
+  /** The champion's score on the frozen slate — what it was chosen by. */
+  championValidation: number | null;
   /**
    * The Hall of Fame, and the id last admitted to it.
    *

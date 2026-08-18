@@ -59,6 +59,7 @@ function configFromFlags(defaults: { generations: number; population: number }):
       maxTicks: flag("max-ticks", 8_000),
     } satisfies SelfPlayConfig,
     validateEvery: flag("validate-every", 5),
+    validationCandidates: flag("validation-candidates", 3),
     seed: flag("seed", 20260817),
     kingdoms,
     balanceConfigId: text("balance", "baseline"),
@@ -142,7 +143,8 @@ function trainCommand(): void {
   });
   console.log(
     `  validation: ${validation.scenarios.length} frozen scenarios ` +
-      `(${slateSeatCost(validation)} seats), champion only, every ${config.validateEvery} generations`,
+      `(${slateSeatCost(validation)} seats), top ${config.validationCandidates} genomes ` +
+      `every ${config.validateEvery} generations — the champion is SELECTED by this`,
   );
   console.log(`  checkpoint: ${checkpointPath}${has("resume") ? " (resuming)" : ""}\n`);
 
@@ -265,7 +267,8 @@ switch (command) {
         "  --resume               resume from the checkpoint if compatible",
         "  --model PATH           where to write the trained model",
         "  --baseline             compare the champion against baselines afterwards",
-        "  --validate-every N     champion vs the frozen validation slate (default 5)",
+        "  --validate-every N     run the frozen validation slate every N generations (default 5)",
+        "  --validation-candidates N  genomes validated per check; the champion is picked from them (default 3)",
         "  --seeds N              repeats per scenario on different seeds",
         "  --hours N              stop cleanly at a generation boundary after N hours",
         "  --heuristic            train against fixed personalities instead of self-play",

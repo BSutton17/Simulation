@@ -54,6 +54,7 @@ export interface ScenarioResult {
   retargets: number;
   waits: number;
   decisions: number;
+  forcedWaits: number;
 
   // scoring
   score: number;
@@ -144,6 +145,15 @@ export interface ScenarioContext {
     retargets: number;
     waits: number;
     decisions: number;
+    /**
+     * Decisions where WAIT was the ONLY legal action.
+     *
+     * The difference between a policy that chooses to do nothing and one that
+     * has nothing to do. Without it a 94%-wait genome is unexplainable: it could
+     * be a network biased toward one output, or a seat that cannot afford, has
+     * unlocked nothing, and has no legal target.
+     */
+    forcedWaits: number;
   };
 }
 
@@ -227,6 +237,7 @@ export function scoreScenario(
     retargets: context.behaviour.retargets,
     waits: context.behaviour.waits,
     decisions: context.behaviour.decisions,
+    forcedWaits: context.behaviour.forcedWaits,
     score,
     terms,
   };

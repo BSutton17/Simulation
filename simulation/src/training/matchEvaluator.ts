@@ -163,6 +163,7 @@ export function playScenario(
         casts: combat.casts, invests: stats.invests, citizens: stats.citizens,
         repairs: stats.repairs, shields: stats.shields, retargets: stats.retargets,
         waits: stats.waits, decisions: stats.decisions,
+        forcedWaits: stats.forcedWaits,
       },
     },
     config,

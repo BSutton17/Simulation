@@ -68,7 +68,6 @@ export function legalActions(knowledge: PlayerKnowledge, mask: ActionMask): Acti
   if (self.hp <= 0) return mask;
 
   const enemies = orderEnemies(knowledge);
-  const hasLiveEnemy = enemies.length > 0;
   // A single-enemy cast resolves against the CURRENT selection, so without one
   // the engine refuses with TARGET_REQUIRED. Same rule a player meets: click a
   // castle, then an ability.
@@ -79,6 +78,13 @@ export function legalActions(knowledge: PlayerKnowledge, mask: ActionMask): Acti
   const selected =
     knowledge.self.targetId !== null &&
     knowledge.enemies.some((e) => e.id === knowledge.self.targetId && e.attackable);
+  // An allEnemies cast resolves against every living enemy the seat is not
+  // BARRED from — Caprice's single-target protection does not stop it, but a
+  // targeting ban does, and the engine refuses with INVALID_TARGET when the
+  // filtered set comes back empty. Checking only "is anyone alive" proposed
+  // casts the engine refused in seven-seat games where several enemies had
+  // banned this seat at once.
+  const anyUnbanned = knowledge.enemies.some((e) => !e.eliminated && !e.targetBanned);
 
   // ── casts (0–4) ───────────────────────────────────────────────────────
   let anyChargeCastable = false;
@@ -102,7 +108,7 @@ export function legalActions(knowledge: PlayerKnowledge, mask: ActionMask): Acti
       // An enemy-directed cast with nothing to resolve against is refused by
       // the engine, so it is not a legal choice here either.
       (ability.targetRequirement === "none" ||
-        (ability.targetRequirement === "selected" ? selected : hasLiveEnemy));
+        (ability.targetRequirement === "selected" ? selected : anyUnbanned));
     if (!castable) continue;
     mask[CAST_BASE + slot] = 1;
     if (ability.charges !== null) anyChargeCastable = true;

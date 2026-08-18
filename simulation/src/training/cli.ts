@@ -5,6 +5,14 @@ import { buildSlate, buildValidationSlate, slateSize, slateSeatCost, type MatchF
 import { estimateMatches, toModel, train, writeModel } from "./trainer.js";
 import { tableCount, type SelfPlayConfig } from "./selfPlay.js";
 import { formatBaselines, runBaselines } from "./baselines.js";
+import {
+  behaviourDiversity,
+  fitnessReliability,
+  heritability,
+  validationDiscrimination,
+} from "./diagnostics.js";
+import { Population } from "../neat/index.js";
+import { ELEMENTALS_SHAPE } from "./matchEvaluator.js";
 
 /**
  * The NEAT command line.
@@ -234,7 +242,78 @@ function baselineCommand(): void {
   console.log(`\n  ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 
+function diagnoseCommand(): void {
+  const config = configFromFlags({ generations: 1, population: flag("population", 16) });
+  const size = config.neat.populationSize;
+  const genomes = new Population(ELEMENTALS_SHAPE, config.neat, flag("seed", 20260817)).ask();
+
+  console.log(
+    `Diagnosing a flat validation curve — population ${size}, ` +
+      `${config.kingdoms.length} kingdoms, maxTicks ${config.slate.maxTicks}
+`,
+  );
+
+  console.log("1. IS SELECTION READING SIGNAL OR NOISE?");
+  const reliability = fitnessReliability(genomes, config);
+  console.log(`   matches per genome        ${reliability.matchesPerGenome}`);
+  console.log(`   spread between genomes    ${reliability.acrossGenomes.toFixed(4)}`);
+  console.log(`   spread of one genome      ${reliability.withinGenome.toFixed(4)}  (same genome, different draw)`);
+  console.log(`   signal-to-noise           ${reliability.signalToNoise.toFixed(2)}`);
+  console.log(`   draw-to-draw correlation  ${reliability.correlation.toFixed(3)}`);
+  console.log(
+    `   -> ${reliability.correlation < 0.3
+      ? "SELECTION IS SORTING NOISE. More generations cannot help; more matches per genome can."
+      : "fitness is repeatable enough to select on."}
+`,
+  );
+
+  console.log("2. CAN VALIDATION TELL GENOMES APART?");
+  const discrimination = validationDiscrimination(genomes.slice(0, 8), config);
+  console.log(`   scenarios                 ${discrimination.scenarios}`);
+  console.log(`   min / median / max        ${discrimination.min.toFixed(4)} / ${discrimination.median.toFixed(4)} / ${discrimination.max.toFixed(4)}`);
+  console.log(`   spread / stdev            ${discrimination.spread.toFixed(4)} / ${discrimination.stdev.toFixed(4)}`);
+  console.log(
+    `   -> ${discrimination.spread < 0.05
+      ? "VALIDATION CANNOT DISCRIMINATE. The champion is close to arbitrary."
+      : "validation separates genomes."}
+`,
+  );
+
+  console.log("3. DOES A CHILD INHERIT ITS PARENT'S SKILL?");
+  const inherit = heritability(genomes[0]!, config, flag("children", 6));
+  console.log(`   parent                    ${inherit.parent.toFixed(4)}`);
+  console.log(`   children mean             ${inherit.meanChild.toFixed(4)}`);
+  console.log(`   mean drift per mutation   ${inherit.meanDrift.toFixed(4)}`);
+  console.log(`   children within 5%        ${(100 * inherit.nearParent).toFixed(0)}%`);
+  console.log(
+    `   -> ${inherit.meanDrift > discrimination.spread
+      ? "ONE MUTATION MOVES SKILL MORE THAN THE POPULATION SPANS. Nothing accumulates."
+      : "mutation steps are small enough to refine rather than re-roll."}
+`,
+  );
+
+  console.log("4. DO GENOMES ACTUALLY PLAY DIFFERENTLY?");
+  const behaviour = behaviourDiversity(genomes.slice(0, 6), config);
+  console.log(`   mean decisions            ${behaviour.meanDecisions.toFixed(0)}`);
+  console.log(`   behaviour diversity       ${behaviour.diversity.toFixed(4)}  (0 = identical policies)`);
+  for (const [i, p] of behaviour.profiles.entries()) {
+    console.log(
+      `     genome ${i}  cast ${(100 * p.casts).toFixed(1)}%  invest ${(100 * p.invests).toFixed(1)}%  ` +
+        `economy ${(100 * p.economy).toFixed(1)}%  wait ${(100 * p.waits).toFixed(1)}%  ` +
+        `(forced ${(100 * p.forcedShare).toFixed(1)}%)`,
+    );
+  }
+  console.log(
+    `   -> ${behaviour.diversity < 0.02
+      ? "THE POPULATION IS ONE POLICY. There is nothing to select between."
+      : "policies differ."}`,
+  );
+}
+
 switch (command) {
+  case "diagnose":
+    diagnoseCommand();
+    break;
   case "xor":
     xor();
     break;
@@ -251,6 +330,7 @@ switch (command) {
         "",
         "  npm run neat:xor                        prove the algorithm on XOR",
         "  npm run neat:baseline                   compare controllers on one slate",
+        "  npm run neat:diagnose                   why is the validation curve flat?",
         "  npm run neat:train -- --generations 5   evolve against real matches",
         "",
         "train / baseline flags:",

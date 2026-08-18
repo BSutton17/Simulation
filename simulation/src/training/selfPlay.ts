@@ -232,6 +232,7 @@ export function playTable(
             retargets: seatStats.retargets,
             waits: seatStats.waits,
             decisions: seatStats.decisions,
+            forcedWaits: seatStats.forcedWaits,
           },
         },
         config,

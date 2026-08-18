@@ -44,6 +44,19 @@ export {
 export { CombatObserver, type SeatCombat } from "./matchObserver.js";
 
 export {
+  behaviourDiversity,
+  correlation,
+  fitnessReliability,
+  heritability,
+  stdev,
+  validationDiscrimination,
+  type BehaviourReport,
+  type DiscriminationReport,
+  type HeritabilityReport,
+  type ReliabilityReport,
+} from "./diagnostics.js";
+
+export {
   DEFAULT_SELF_PLAY,
   HallOfFame,
   buildSelfPlayTables,

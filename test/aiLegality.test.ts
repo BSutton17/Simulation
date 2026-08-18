@@ -299,3 +299,35 @@ test("a barred target is neither attackable nor selectable", () => {
   const other = knowledge.enemies.find((e) => e.id !== f.enemy.id)!;
   assert.equal(other.attackable, true);
 });
+
+test("an allEnemies cast needs a living enemy this seat is not barred from", () => {
+  // Regression, found by the diagnostics in a seven-seat game. The engine
+  // filters allEnemies targets by the same targeting bans and refuses with
+  // INVALID_TARGET when the filtered set is empty — so "is anyone alive" is not
+  // the question. Caprice is deliberately NOT part of it: its protection covers
+  // one named target and an allEnemies cast still lands on everyone else.
+  const f = fixture("air", true);
+  const kit = abilitiesForKingdom("air").filter((a) => a.kind !== "passive");
+  const allEnemiesSlot = kit.findIndex((a) => a.targeting.mode === "allEnemies");
+  if (allEnemiesSlot < 0) return; // kingdom has none; nothing to assert
+
+  assert.equal(maskFor(f)[CAST_BASE + allEnemiesSlot], 1, "should start castable");
+
+  // Every living enemy bars this seat from aiming at them.
+  for (const enemy of f.match.gameState!.getPlayers()) {
+    if (enemy.id === f.me.id) continue;
+    f.me.statuses.push({
+      id: `flood-${enemy.id}`,
+      sourceId: enemy.id,
+      remainingTicks: 200,
+      stacks: 1,
+      blocksTargetingSource: true,
+    });
+  }
+
+  assert.equal(
+    maskFor(f)[CAST_BASE + allEnemiesSlot],
+    0,
+    "offered an allEnemies cast with every enemy barred",
+  );
+});

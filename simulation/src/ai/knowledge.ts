@@ -185,6 +185,13 @@ export interface EnemyKnowledge {
    */
   readonly attackable: boolean;
   /**
+   * This seat is barred from aiming at them by a status they applied (Water's
+   * Flood). Kept separate from `attackable` because the engine applies it to
+   * BOTH targeting modes, while Caprice's protection applies only to a named
+   * single target — an `allEnemies` cast still lands on everyone else.
+   */
+  readonly targetBanned: boolean;
+  /**
    * Whether this seat may SELECT them. Everything `attackable` requires, plus
    * the selection-only rules — Insects' Caprice refuses manual selection while
    * it holds the field, but does not stop a cast at an already-chosen target.
@@ -590,6 +597,7 @@ export function knowledgeFor(
       income: reveal ? known(enemy.economy.incomePerTick) : UNKNOWN_NUMBER,
       damageDealt: history.damageDealtTo(enemy.id),
       ticksSinceDamaged: history.ticksSinceDamaged(enemy.id, tick),
+      targetBanned: isTargetingBlocked(player, enemy.id),
       attackable:
         !enemy.eliminated &&
         match.hasPlayer(enemy.id) &&

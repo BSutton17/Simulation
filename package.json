@@ -22,7 +22,8 @@
     "test:persistence": "python kaggle/test_checkpoint_store.py",
     "neat:xor": "tsx simulation/src/training/cli.ts xor",
     "neat:train": "tsx simulation/src/training/cli.ts train",
-    "neat:baseline": "tsx simulation/src/training/cli.ts baseline"
+    "neat:baseline": "tsx simulation/src/training/cli.ts baseline",
+    "neat:diagnose": "tsx simulation/src/training/cli.ts diagnose"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

@@ -1,6 +1,6 @@
 import { evaluate, balancedDuelPairings } from "../evaluation/index.js";
 import { scoreFitness, WEIGHT_PRESETS } from "../fitness/index.js";
-import { SCREEN_TIER, FULL_TIER, VALIDATION_TIER, type TierConfig, type EvaluationTier } from "../search/index.js";
+import { tierFor, type EvaluationTier } from "../search/index.js";
 import { QueueClient } from "./client.js";
 import { backoffMs, identityMismatches, makeWorkerId, type ExperimentIdentity, type JobRecord } from "./protocol.js";
 
@@ -17,9 +17,6 @@ import { backoffMs, identityMismatches, makeWorkerId, type ExperimentIdentity, t
  * identical numbers.
  */
 
-const TIERS: Record<EvaluationTier, TierConfig> = {
-  screen: SCREEN_TIER, full: FULL_TIER, validation: VALIDATION_TIER,
-};
 
 export interface WorkerOptions {
   client: QueueClient;
@@ -45,8 +42,8 @@ export interface WorkerSummary {
 }
 
 /** Builds the evaluation config for a tier — identical to the local search. */
-function configFor(tier: EvaluationTier, parameters: Record<string, number>, id: string, workers: number) {
-  const t = TIERS[tier];
+function configFor(tier: EvaluationTier, parameters: Record<string, number>, id: string, workers: number, allocation: string) {
+  const t = tierFor(allocation, tier);
   return {
     balanceConfigId: id,
     balance: parameters,
@@ -70,13 +67,13 @@ function configFor(tier: EvaluationTier, parameters: Record<string, number>, id:
  * generation can close. A worker that threw instead would hold the job until
  * its lease expired and the next worker hit the same problem.
  */
-async function runJob(job: JobRecord, workers: number): Promise<{
+async function runJob(job: JobRecord, workers: number, allocation: string): Promise<{
   fitness: unknown | null; failure: string | null; durationMs: number; matches: number;
 }> {
   const started = Date.now();
   try {
     const reading = await evaluate(
-      configFor(job.tier, job.parameters, `${job.candidateId}:${job.tier}`, workers),
+      configFor(job.tier, job.parameters, `${job.candidateId}:${job.tier}`, workers, allocation),
     );
     const fitness = scoreFitness(reading, {
       weights: WEIGHT_PRESETS.designerPriority, weightsName: "designerPriority",
@@ -121,8 +118,13 @@ export async function runWorker(options: WorkerOptions): Promise<WorkerSummary> 
   const started = Date.now();
   const workerId = makeWorkerId("kaggle");
 
+  // Read once, before any job is claimed. A worker that cannot determine which
+  // match-budget split the experiment uses must not guess: it would return
+  // scores measured on a different instrument than its coordinator assumed.
+  const allocation = (await client.experimentIdentity(experimentId)).allocation;
+
   await client.registerWorker(workerId, experimentId);
-  log(`registered ${workerId} (${workers} local threads)`);
+  log(`registered ${workerId} (${workers} local threads, allocation ${allocation})`);
 
   let completed = 0, failed = 0, duplicates = 0, emptyPolls = 0;
 
@@ -161,7 +163,7 @@ export async function runWorker(options: WorkerOptions): Promise<WorkerSummary> 
 
     let outcome;
     try {
-      outcome = await runJob(job, workers);
+      outcome = await runJob(job, workers, allocation);
     } finally {
       clearInterval(renew);
     }

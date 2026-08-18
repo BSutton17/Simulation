@@ -1,4 +1,6 @@
+import { gzipSync, gunzipSync } from "node:zlib";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SearchCheckpoint } from "../search/index.js";
 import type { EvaluationTier } from "../search/index.js";
 import type { ExperimentIdentity, JobRecord, ResultRecord } from "./protocol.js";
 
@@ -149,6 +151,7 @@ export class QueueClient {
       scope: identity.scope,
       fitness_version: identity.fitnessVersion,
       weights_name: identity.weightsName,
+      allocation: identity.allocation,
       generations_target: generationsTarget,
     }).select("id, current_generation").single();
     if (created.error) QueueClient.fail("insert experiment", created.error);
@@ -179,6 +182,59 @@ export class QueueClient {
     if (error) QueueClient.fail("publish jobs", error);
   }
 
+  /**
+   * Writes the search's durable state.
+   *
+   * The previous run's checkpoint lived in `/kaggle/working`, which the session
+   * deletes on exit. Everything needed to continue was computed and written
+   * correctly, and then thrown away — the restart began at generation 0 with
+   * thirteen generations of search lost. Supabase is the only storage both a
+   * dying coordinator and its replacement can see.
+   *
+   * Compressed because the checkpoint carries the evaluation cache, which grows
+   * every generation; uncompressed it outgrows what PostgREST will accept.
+   */
+  async saveCheckpoint(experimentId: string, checkpoint: SearchCheckpoint): Promise<void> {
+    const payload = gzipSync(Buffer.from(JSON.stringify(checkpoint), "utf8")).toString("base64");
+    const { error } = await this.db.from("checkpoints").upsert(
+      {
+        experiment_id: experimentId,
+        generation: checkpoint.completedGenerations,
+        stage: checkpoint.stage,
+        encoding: "gzip+base64",
+        payload,
+        bytes: payload.length,
+        written_at: new Date().toISOString(),
+      },
+      { onConflict: "experiment_id,generation,stage" },
+    );
+    if (error) QueueClient.fail("save checkpoint", error);
+  }
+
+  /**
+   * The most recent checkpoint, or null when the experiment has none.
+   *
+   * Ordered by write time rather than generation because stages advance within
+   * a generation: after the last generation the run writes stage "validation"
+   * at the same generation count, and that is the more advanced state.
+   */
+  async loadCheckpoint(experimentId: string): Promise<SearchCheckpoint | null> {
+    const { data, error } = await this.db.from("checkpoints")
+      .select("payload, encoding")
+      .eq("experiment_id", experimentId)
+      .order("written_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) QueueClient.fail("load checkpoint", error);
+    if (!data) return null;
+    if (data.encoding !== "gzip+base64") {
+      throw new Error(`checkpoint has unknown encoding "${data.encoding}"`);
+    }
+    return JSON.parse(
+      gunzipSync(Buffer.from(data.payload as string, "base64")).toString("utf8"),
+    ) as SearchCheckpoint;
+  }
+
   async setCurrentGeneration(experimentId: string, generation: number): Promise<void> {
     const { error } = await this.db.from("experiments")
       .update({ current_generation: generation, updated_at: new Date().toISOString() })
@@ -190,7 +246,7 @@ export class QueueClient {
 
   async experimentIdentity(experimentId: string): Promise<ExperimentIdentity> {
     const { data, error } = await this.db.from("experiments")
-      .select("engine_sha, schema_version, catalog_hash, seed, population_size, sigma, scope, fitness_version, weights_name")
+      .select("engine_sha, schema_version, catalog_hash, seed, population_size, sigma, scope, fitness_version, weights_name, allocation")
       .eq("id", experimentId).single();
     if (error) QueueClient.fail("read experiment", error);
     return {
@@ -198,6 +254,9 @@ export class QueueClient {
       catalogHash: data.catalog_hash, seed: data.seed,
       populationSize: data.population_size, sigma: data.sigma, scope: data.scope,
       fitnessVersion: data.fitness_version, weightsName: data.weights_name,
+      // Rows written before the column existed read as v1, which is what they
+      // in fact ran.
+      allocation: (data.allocation as string | null) ?? "v1",
     };
   }
 

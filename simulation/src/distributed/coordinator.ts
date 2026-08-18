@@ -66,13 +66,21 @@ export function distributedEvaluator(options: CoordinatorOptions) {
   const pollMs = options.pollMs ?? 15_000;
   const timeoutMs = options.generationTimeoutMs ?? 6 * 60 * 60 * 1000;
   const log = options.onProgress ?? (() => {});
-  let generation = 0;
 
+  /**
+   * The generation index comes from the search loop, never from a counter here.
+   *
+   * This function used to own `let generation = 0` and increment it per call,
+   * which is only correct in a process that starts at generation 0. A
+   * coordinator restarting into generation 13 published that work as generation
+   * 0, where it collided with the rows generation 0 had already written. The
+   * search loop is the only thing that knows which generation it is running.
+   */
   return async function evaluateGeneration(
     candidates: Candidate[],
     tier: EvaluationTier,
+    current: number,
   ): Promise<CandidateEvaluation[]> {
-    const current = generation++;
     const started = Date.now();
 
     // Publishing is idempotent: the table's uniqueness constraint means a

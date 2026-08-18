@@ -1,4 +1,4 @@
-import { buildSchema, searchable, type SearchScope } from "../search/index.js";
+import { buildSchema, searchable, DEFAULT_ALLOCATION, type SearchScope, type AllocationVersion } from "../search/index.js";
 import { captureProvenance } from "../evaluation/provenance.js";
 import { FITNESS_VERSION } from "../fitness/index.js";
 import type { ExperimentIdentity } from "./protocol.js";
@@ -18,6 +18,8 @@ export function localIdentity(options: {
   populationSize?: number;
   sigma?: number;
   weightsName?: string;
+  /** Match-budget split. Defaults to v1 so nothing that omits it changes. */
+  allocation?: AllocationVersion;
 } = {}): ExperimentIdentity {
   const scope = options.scope ?? "expanded";
   const schema = buildSchema({ scope });
@@ -39,5 +41,6 @@ export function localIdentity(options: {
     scope,
     fitnessVersion: FITNESS_VERSION,
     weightsName: options.weightsName ?? "designerPriority",
+    allocation: options.allocation ?? DEFAULT_ALLOCATION,
   };
 }

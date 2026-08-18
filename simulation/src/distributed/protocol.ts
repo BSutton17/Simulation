@@ -27,6 +27,16 @@ export interface ExperimentIdentity {
   scope: string;
   fitnessVersion: string;
   weightsName: string;
+  /**
+   * Which match-budget split produced this experiment's numbers.
+   *
+   * It lives on the experiment row rather than in each notebook's environment
+   * because workers do the evaluating: a worker configured for a different
+   * split than its coordinator would return scores measured on a different
+   * instrument, and nothing downstream would notice. One source of truth, read
+   * by whoever needs it.
+   */
+  allocation: string;
 }
 
 /** One unit of work: a single candidate at a single tier. */

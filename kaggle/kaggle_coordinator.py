@@ -44,10 +44,23 @@ VALIDATE = 1
 # Blank uses the CMA-ES standard for this dimensionality: 4 + 3*ln(181) = 19.
 POPULATION = ""
 
-# Names the experiment and the checkpoint dataset. Changing it starts a
-# separate run rather than joining the existing one.
-EXPERIMENT_NAME = "elementals-expanded-s20260813"
-DATASET_NAME = "elementals-checkpoint-v2"
+# Match-budget split. v2 gives 7-FFA 54% of the matches for 35% of the fitness
+# weight; v1 gave it 13% and put it below its own sampling noise.
+ALLOCATION = "v2"
+
+# Names the experiment. Changing it starts a separate run rather than joining
+# the existing one — which is exactly why V3 has its own name and the previous
+# experiment stays untouched.
+EXPERIMENT_NAME = "elementals-balance-v3-v2-s20260813"
+
+# The checkpoint now lives in Supabase (table `checkpoints`), not in a Kaggle
+# Dataset. /kaggle/working is deleted when a session ends, which is how the
+# previous run lost thirteen generations: the checkpoint was written correctly
+# after every generation and then thrown away with the session. Supabase is the
+# only storage both a dying coordinator and its replacement can see.
+#
+# To resume after a session timeout: re-run this notebook unchanged. It finds
+# the experiment by name, restores the latest checkpoint, and continues.
 
 WORK = Path("/kaggle/working")
 OUT = WORK / "coordinator"
@@ -125,6 +138,7 @@ def main():
         "--promote", str(PROMOTE),
         "--validate", str(VALIDATE),
         "--name", EXPERIMENT_NAME,
+        "--allocation", ALLOCATION,
         "--out", str(OUT),
     ]
     if POPULATION:

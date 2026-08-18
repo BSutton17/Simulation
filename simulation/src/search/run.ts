@@ -15,9 +15,11 @@ import {
   CHECKPOINT_VERSION,
   cacheKeyOf,
   readCheckpoint,
+  acceptCheckpoint,
   writeCheckpoint,
   type CheckpointIdentity,
   type CheckpointStage,
+  type SearchCheckpoint,
 } from "./checkpoint.js";
 import { captureProvenance } from "../evaluation/provenance.js";
 import { hashSeed } from "../rng.js";
@@ -123,7 +125,34 @@ export interface SearchConfig {
   /** Ignore any checkpoint on disk and start over. */
   restart?: boolean;
   /**
-   * Evaluates a whole generation, for distributing the work off this machine.
+   * How the match budget is split across formats.
+   *
+   * Defaults to the v1 split so existing runs are untouched. Supply an
+   * allocation from `./allocation.js` to change it — the resolved tiers are
+   * fingerprinted into the checkpoint identity, so a run started under one
+   * split refuses to resume under another rather than silently mixing them.
+   */
+  tiers?: TierSet;
+  /**
+   * Durable checkpoint storage, for runs whose machine is disposable.
+   *
+   * `checkpointPath` writes to local disk, which on a hosted runner is deleted
+   * when the session ends — the previous run lost thirteen generations that
+   * way. A store is read before the path and written after it, so the durable
+   * copy is authoritative and the local file remains a convenience.
+   */
+  checkpointStore?: {
+    load(): Promise<SearchCheckpoint | null>;
+    save(checkpoint: SearchCheckpoint): Promise<void>;
+  };
+  /**
+   * `generation` is passed rather than counted by the implementation.
+   *
+   * The distributed evaluator used to keep its own `let generation = 0`, which
+   * was correct exactly once — in a process that started at generation 0 and
+   * never restarted. A coordinator resuming at generation 13 published its work
+   * as generation 0, colliding with rows that already existed. The generation
+   * index belongs to the search loop, which is the thing that knows it.
    *
    * Omit it and candidates are evaluated here, one at a time, as always. Supply
    * it and they can go anywhere — a worker pool, other Kaggle notebooks, a job
@@ -134,13 +163,12 @@ export interface SearchConfig {
    * `candidates` order. `cma.tell` is handed `screened.map(rankOf)`, so the
    * order of that array IS the correspondence between candidate and score.
    * Return them shuffled and the strategy learns from a permuted population
-   * without anything erroring. Evaluation is deterministic given
-   * (parameters, tier, pool), so an ordered result set makes the distributed
-   * path mathematically identical to the local one rather than merely similar.
+   * without anything erroring.
    */
   evaluateGeneration?: (
     candidates: Candidate[],
     tier: EvaluationTier,
+    generation: number,
   ) => Promise<CandidateEvaluation[]>;
   /**
    * Wall-clock budget in milliseconds. When it runs out the search stops at the
@@ -238,7 +266,11 @@ function evaluationConfig(
   };
 }
 
-const TIERS: Record<EvaluationTier, TierConfig> = {
+export type TierSet = Record<EvaluationTier, TierConfig>;
+
+/** The v1 split. `allocation.ts` names this and adds v2; run.ts deliberately
+ *  does not import that module, so the dependency runs one way only. */
+const TIERS: TierSet = {
   screen: SCREEN_TIER,
   full: FULL_TIER,
   validation: VALIDATION_TIER,
@@ -283,7 +315,7 @@ async function evaluateCandidate(
     try {
       const reading = await evaluate(
         evaluationConfig(
-          TIERS[tier],
+          (config.tiers ?? TIERS)[tier],
           pool,
           candidate.parameters,
           `${candidate.id}:${tier}`,
@@ -399,13 +431,27 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
     populationSize,
     sigma,
     promote,
-    tiersHash: hashSeed(JSON.stringify([SCREEN_TIER, FULL_TIER, VALIDATION_TIER]))
+    tiersHash: hashSeed(JSON.stringify(((t) => [t.screen, t.full, t.validation])(config.tiers ?? TIERS)))
       .toString(16)
       .padStart(8, "0"),
   };
 
-  const loaded =
-    config.checkpointPath && !config.restart
+  // The store wins when it has anything, because the local file may be from a
+  // session that has since been destroyed. Both go through the same identity
+  // check: durable storage moved where the bytes live, not what counts as a
+  // resumable run.
+  const stored = config.checkpointStore && !config.restart
+    ? await config.checkpointStore.load().catch((error: unknown) => {
+        config.onProgress?.({
+          kind: "generation", generation: -1,
+          message: `checkpoint store unreadable: ${(error as Error).message}`,
+        });
+        return null;
+      })
+    : null;
+  const loaded = stored
+    ? acceptCheckpoint(stored, identity)
+    : config.checkpointPath && !config.restart
       ? readCheckpoint(config.checkpointPath, identity)
       : { checkpoint: null, rejected: null };
   if (loaded.rejected) {
@@ -521,10 +567,12 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
    * write must not destroy a run that is otherwise fine: a lost checkpoint
    * costs time, an aborted search costs everything.
    */
-  const saveCheckpoint = (completed: number, stage: CheckpointStage, generation: number): void => {
-    if (!config.checkpointPath) return;
+  const saveCheckpoint = async (
+    completed: number, stage: CheckpointStage, generation: number,
+  ): Promise<void> => {
+    if (!config.checkpointPath && !config.checkpointStore) return;
     try {
-      writeCheckpoint(config.checkpointPath, {
+      const snapshot: SearchCheckpoint = {
         version: CHECKPOINT_VERSION,
         identity,
         writtenAt: (config.now ?? (() => new Date().toISOString()))(),
@@ -541,7 +589,11 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
           matches, screens, fulls, validations, failures,
           elapsedMs: performance.now() - started,
         },
-      });
+      };
+      if (config.checkpointPath) writeCheckpoint(config.checkpointPath, snapshot);
+      // Awaited, not fired and forgotten: a coordinator that is about to be
+      // killed must not lose the write it thinks it made.
+      if (config.checkpointStore) await config.checkpointStore.save(snapshot);
     } catch (error) {
       config.onProgress?.({
         kind: "generation",
@@ -569,7 +621,7 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
     // Screen everything cheaply, here or elsewhere.
     const screened: CandidateEvaluation[] = [];
     if (config.evaluateGeneration) {
-      const results = await config.evaluateGeneration(candidates, "screen");
+      const results = await config.evaluateGeneration(candidates, "screen", g);
       if (results.length !== candidates.length) {
         throw new Error(
           `evaluateGeneration returned ${results.length} results for ${candidates.length} candidates`,
@@ -642,7 +694,7 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
 
     // Written AFTER the generation is fully accounted for, so a checkpoint
     // never describes a half-finished generation.
-    saveCheckpoint(g + 1, g + 1 >= generations ? "validation" : "search", g);
+    await saveCheckpoint(g + 1, g + 1 >= generations ? "validation" : "search", g);
 
     // Checked AFTER the checkpoint, so the work just finished is never the work
     // that gets lost.
@@ -677,19 +729,19 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
     baselineValidation = await evaluateCandidate(baselineCandidate, "validation", cache, config, fitnessConfig);
     record(baselineValidation);
     remember(baselineValidation);
-    saveCheckpoint(generations, "validation", generations);
+    await saveCheckpoint(generations, "validation", generations);
 
     bestValidation = await evaluateCandidate(bestFull.candidate, "validation", cache, config, fitnessConfig);
     record(bestValidation);
     remember(bestValidation);
-    saveCheckpoint(generations, "validation", generations);
+    await saveCheckpoint(generations, "validation", generations);
   }
 
   // The run is finished only once everything it owed has been produced. A
   // checkpoint marked "complete" is the one thing readCheckpoint refuses to
   // resume, so it is written last and only when nothing is outstanding.
   const finished = !stoppedEarly && (validateCount === 0 || !bestFull || bestValidation !== null);
-  if (finished) saveCheckpoint(generations, "complete", generations);
+  if (finished) await saveCheckpoint(generations, "complete", generations);
 
   return {
     optimizer: "cmaes",

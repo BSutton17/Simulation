@@ -36,7 +36,13 @@ EXPERIMENT_ID = ""
 
 # Local evaluation threads. Two measured fastest on a 4-core Kaggle notebook:
 # 19.85 match/s against 18.64 at three and 14.29 at one.
-WORKERS = 2
+# Evaluation threads inside this notebook. `None` uses every core Kaggle gives
+# us, which is the right default: the previous run hardcoded 2 while the box
+# reported more, and left the rest idle. The worker reads its match-budget split
+# from the experiment row, so no allocation setting belongs here — a worker
+# configured differently from its coordinator would return scores measured on a
+# different instrument and nothing downstream would notice.
+WORKERS = None
 
 # Stop between jobs before the session is killed, so a job is never abandoned
 # mid-evaluation. A job that IS abandoned is not lost — its lease lapses and
@@ -97,7 +103,7 @@ def main():
         print("\nFAILED: set EXPERIMENT_ID to the value the coordinator printed.")
         return 1
     print(f"  experiment {EXPERIMENT_ID}")
-    print(f"  threads    {WORKERS}   cores {os.cpu_count()}   budget {HOURS}h")
+    print(f"  threads    {WORKERS if WORKERS else (os.cpu_count() or 2)}   cores {os.cpu_count()}   budget {HOURS}h")
     print()
 
     load_secrets()
@@ -118,7 +124,7 @@ def main():
     sh([
         "node", "dist/simulation/src/distributed/runWorker.js",
         "--experiment", EXPERIMENT_ID,
-        "--workers", str(WORKERS),
+        "--workers", str(WORKERS if WORKERS else (os.cpu_count() or 2)),
         "--hours", str(HOURS),
     ], cwd=SRC)
 

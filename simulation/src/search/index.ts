@@ -52,11 +52,25 @@ export {
   type SearchResult,
   type GenerationRecord,
   type TierConfig,
+  type TierSet,
   type ProgressEvent,
 } from "./run.js";
 
 export {
+  ALLOCATIONS,
+  ALLOCATION_V1,
+  ALLOCATION_V2,
+  DEFAULT_ALLOCATION,
+  allocationFor,
+  tierFor,
+  isAllocationVersion,
+  type Allocation,
+  type AllocationVersion,
+} from "./allocation.js";
+
+export {
   readCheckpoint,
+  acceptCheckpoint,
   writeCheckpoint,
   identityMismatches,
   cacheKeyOf,

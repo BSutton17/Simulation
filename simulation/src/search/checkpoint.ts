@@ -147,6 +147,21 @@ export function readCheckpoint(path: string, identity: CheckpointIdentity): Chec
   } catch (error) {
     return { checkpoint: null, rejected: `unreadable checkpoint: ${(error as Error).message}` };
   }
+  return acceptCheckpoint(parsed, identity);
+}
+
+/**
+ * Decides whether an already-loaded checkpoint applies to this run.
+ *
+ * Split out from `readCheckpoint` so a checkpoint restored from Supabase gets
+ * exactly the same scrutiny as one read from disk. Durable storage moved where
+ * the bytes live; it must not change what counts as a resumable run.
+ */
+export function acceptCheckpoint(
+  parsed: SearchCheckpoint | null,
+  identity: CheckpointIdentity,
+): CheckpointLoad {
+  if (!parsed) return { checkpoint: null, rejected: null };
 
   if (parsed.version !== CHECKPOINT_VERSION) {
     return { checkpoint: null, rejected: `checkpoint version ${parsed.version} != ${CHECKPOINT_VERSION}` };

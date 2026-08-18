@@ -1,6 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runSearch, buildSchema, searchable, type SearchScope } from "../search/index.js";
+import {
+  runSearch, buildSchema, searchable, allocationFor, isAllocationVersion,
+  type SearchScope,
+} from "../search/index.js";
 import { WEIGHT_PRESETS, fitnessText } from "../fitness/index.js";
 import { QueueClient } from "./client.js";
 import { distributedEvaluator, assertCoordinatorMatches } from "./coordinator.js";
@@ -34,7 +37,15 @@ const sigma = Number(arg("sigma", "0.2"));
 const schema = buildSchema({ scope });
 const dimensions = searchable(schema).length;
 const population = Number(arg("population", String(4 + Math.floor(3 * Math.log(dimensions)))));
-const name = arg("name", `elementals-${scope}-s${seed}`)!;
+const allocationName = arg("allocation", "v2")!;
+if (!isAllocationVersion(allocationName)) {
+  throw new Error(`--allocation must be one of v1, v2 (got "${allocationName}")`);
+}
+// Balance V3 defaults to the v2 split and says so in its name, because the
+// allocation is part of what produced the numbers. Resuming the wrong
+// experiment is prevented by name AND by the checkpoint identity, which
+// fingerprints the tier configuration.
+const name = arg("name", `elementals-balance-v3-${allocationName}-s${seed}`)!;
 const out = arg("out", "runs/distributed")!;
 const promote = Number(arg("promote", "1"));
 const validate = Number(arg("validate", "1"));
@@ -54,7 +65,8 @@ function log(line: string): void {
   }
 }
 
-const identity = localIdentity({ scope, seed, populationSize: population, sigma });
+const identity = localIdentity({
+  allocation: allocationName, scope, seed, populationSize: population, sigma });
 
 log("=".repeat(70));
 log("DISTRIBUTED CMA-ES — COORDINATOR");
@@ -87,7 +99,14 @@ const result = await runSearch({
   sigma,
   promote,
   validate,
+  tiers: allocationFor(allocationName),
+  // Local disk is a convenience; /kaggle/working is deleted when the session
+  // ends. The durable copy in Supabase is what a restarted coordinator reads.
   checkpointPath: join(out, "checkpoint.json"),
+  checkpointStore: {
+    load: () => client.loadCheckpoint(experiment.id),
+    save: (checkpoint) => client.saveCheckpoint(experiment.id, checkpoint),
+  },
   fitness: { weights: WEIGHT_PRESETS.designerPriority, weightsName: "designerPriority" },
   // The only change from a local search: evaluation happens elsewhere. The
   // loop's own guards on count and per-index hash still apply on top of the

@@ -9,6 +9,9 @@ import {
   type Candidate,
 } from "./matchEvaluator.js";
 import type { FitnessConfig, TrainingResult } from "./fitness.js";
+import { baselineKey, genomeKey, type EvaluationCache } from "./evaluationCache.js";
+import type { MatchRunner } from "./parallel/runner.js";
+import type { CandidateSpec } from "./parallel/protocol.js";
 import type { Slate } from "./slate.js";
 
 /**
@@ -80,6 +83,17 @@ export interface BaselineOptions {
   /** Trained genomes to include, by label. */
   genomes?: { name: string; genome: Genome }[];
   seed?: number;
+  /**
+   * Optional memo across calls.
+   *
+   * Baselines are re-run every benchmark check against the SAME fixed slate, so
+   * without this the heuristic rows are recomputed identically every time — 3,456
+   * wasted matches on the last 50-generation run. Evaluation is deterministic, so
+   * a hit is the same number, not an approximation.
+   */
+  cache?: EvaluationCache;
+  /** Content hash per genome, for cache identity. Ids are not content. */
+  fingerprint?: (genome: Genome) => string;
 }
 
 /**
@@ -88,37 +102,58 @@ export interface BaselineOptions {
  * Same slate for every entry, deliberately: the scenarios carry their own seeds,
  * so each controller meets identical kingdoms, opponents, seats and dice.
  */
-export function runBaselines(options: BaselineOptions): BaselineReport {
+export async function runBaselines(
+  runner: MatchRunner,
+  options: BaselineOptions,
+): Promise<BaselineReport> {
   const seed = options.seed ?? 12345;
   const entries: BaselineEntry[] = [];
+  const hash = options.slate.hash;
+  // Without a cache every lookup simply computes, so behaviour is unchanged.
+  const memo = async (key: string, spec: CandidateSpec): Promise<TrainingResult> => {
+    const hit = options.cache?.peek(key);
+    if (hit) return hit;
+    const value = await runner.evaluate(spec, options.slate, options.fitness);
+    return options.cache ? options.cache.put(key, value) : value;
+  };
 
   entries.push({
     name: "random",
     kind: "random",
-    result: evaluateCandidate(randomCandidate(seed), options.slate, options.fitness),
+    result: await memo(baselineKey("bench", "random", seed, hash), {
+      kind: "random",
+      seed,
+      name: "random",
+    }),
   });
 
   for (const profile of options.personalities ?? ["balanced", "aggressive", "economic"]) {
     entries.push({
       name: profile,
       kind: "personality",
-      result: evaluateCandidate(personalityCandidate(profile), options.slate, options.fitness),
+      result: await memo(baselineKey("bench", profile, seed, hash), {
+        kind: "personality",
+        profile,
+      }),
     });
   }
 
   for (const entry of options.genomes ?? []) {
+    // Keyed by CONTENT, so an unchanged champion under a new label still hits,
+    // and a mutated genome that kept its id still misses.
+    const identity = options.fingerprint?.(entry.genome) ?? entry.genome.id;
     entries.push({
       name: entry.name,
       kind: "genome",
-      result: evaluateCandidate(
-        networkCandidate(buildNetwork(entry.genome), entry.name),
-        options.slate,
-        options.fitness,
-      ),
+      result: await memo(genomeKey("bench", identity, hash), {
+        kind: "genome",
+        genome: entry.genome,
+        name: entry.name,
+      }),
     });
   }
 
-  return { slateHash: options.slate.hash, scenarios: options.slate.scenarios.length, entries };
+  return { slateHash: hash, scenarios: options.slate.scenarios.length, entries };
 }
 
 /** A fixed-width table, ordered by fitness. */

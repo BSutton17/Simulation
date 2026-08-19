@@ -1,10 +1,13 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { runXor, withConfig, XOR_CONFIG } from "../neat/index.js";
 import { KINGDOM_IDS, type KingdomId } from "../../../src/data/kingdoms.js";
 import { trainingConfig, type TrainingConfig } from "./config.js";
 import { buildSlate, buildValidationSlate, slateSize, slateSeatCost, type MatchFormat } from "./slate.js";
 import { estimateMatches, toModel, train, writeModel } from "./trainer.js";
-import { tableCount, type SelfPlayConfig } from "./selfPlay.js";
+import { tableCount, type OpponentSelection, type SelfPlayConfig } from "./selfPlay.js";
 import { formatBaselines, runBaselines } from "./baselines.js";
+import { createRunner, defaultWorkerCount } from "./parallel/runner.js";
 import {
   behaviourDiversity,
   fitnessReliability,
@@ -44,6 +47,20 @@ function text(name: string, fallback: string): string {
   return at >= 0 && args[at + 1] !== undefined ? args[at + 1]! : fallback;
 }
 
+/** "3m42s" / "1h04m" — short enough to sit inside a generation line. */
+function duration(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m${String(seconds % 60).padStart(2, "0")}s`;
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+function opponentSelection(value: string): OpponentSelection {
+  if (value === "banded" || value === "random" || value === "shuffle") return value;
+  throw new Error(`--pairing must be shuffle, banded or random; got "${value}"`);
+}
+
 /** Shared config assembly, so train and baseline evaluate the same design. */
 function configFromFlags(defaults: { generations: number; population: number }): TrainingConfig {
   const kingdomFilter = text("kingdoms", "");
@@ -65,9 +82,13 @@ function configFromFlags(defaults: { generations: number; population: number }):
       roundsPerFormat: flag("rounds-per-format", 2),
       hallOfFameShare: flag("hof-share", 0.15),
       maxTicks: flag("max-ticks", 8_000),
+      opponentSelection: opponentSelection(text("pairing", "shuffle")),
     } satisfies SelfPlayConfig,
     validateEvery: flag("validate-every", 5),
     validationCandidates: flag("validation-candidates", 3),
+    benchmarkEvery: flag("benchmark-every", 0),
+    workers: flag("workers", defaultWorkerCount()),
+    validationSeeds: flag("validation-seeds", 1),
     seed: flag("seed", 20260817),
     kingdoms,
     balanceConfigId: text("balance", "baseline"),
@@ -116,7 +137,7 @@ function xor(): void {
   if (solved < runs) process.exitCode = 1;
 }
 
-function trainCommand(): void {
+async function trainCommand(): Promise<void> {
   const config = configFromFlags({ generations: 5, population: 30 });
   const checkpointPath = text("checkpoint", "runs/neat/checkpoint.json");
   const perGenome = slateSize(config.slate, config.kingdoms.length);
@@ -132,6 +153,8 @@ function trainCommand(): void {
       `  formats ${config.selfPlay.formats.join(",")}  ` +
         `${config.selfPlay.roundsPerFormat} rounds/format  ` +
         `hall-of-fame share ${config.selfPlay.hallOfFameShare}  ` +
+        `pairing ${config.selfPlay.opponentSelection}  ` +
+        `workers ${config.workers}  ` +
         `balance ${config.balanceConfigId}`,
     );
   } else {
@@ -157,25 +180,74 @@ function trainCommand(): void {
   console.log(`  checkpoint: ${checkpointPath}${has("resume") ? " (resuming)" : ""}\n`);
 
   const started = Date.now();
-  const result = train({
+  // A one-line progress file beside the checkpoint.
+  //
+  // A long run's ETA is otherwise buried in scrollback, and answering "how much
+  // time is left" means parsing a log. One file, overwritten each generation, is
+  // a single `cat` away — which is the whole point.
+  const progressPath = text("progress", `${dirname(checkpointPath)}/progress.txt`);
+  let completed = 0;
+
+  const result = await train({
     config,
     checkpointPath,
     resume: has("resume"),
     budgetMs: has("hours") ? flag("hours", 1) * 3_600_000 : undefined,
     onGeneration: (record) => {
+      completed += 1;
+      const elapsed = Date.now() - started;
+      const perGeneration = elapsed / completed;
+      const remaining = Math.max(0, config.generations - (record.generation + 1));
+      const eta = remaining * perGeneration;
+      const line =
+        `gen ${record.generation + 1}/${config.generations}  ` +
+        `elapsed ${duration(elapsed)}  per-gen ${(perGeneration / 1000).toFixed(1)}s  ` +
+        `${remaining} left  ETA ${duration(eta)}  ` +
+        `finishes ${new Date(Date.now() + eta).toLocaleTimeString()}  ` +
+        (record.matchesSaved > 0 ? `saved ${record.matchesSaved} matches  ` : "") +
+        `| train best ${record.best.toFixed(4)}  ` +
+        `validation ${record.validationFitness?.toFixed(4) ?? "—"}  ` +
+        `champion ${record.championId ?? "—"} @ ${record.championValidation?.toFixed(4) ?? "—"}`;
+      try {
+        mkdirSync(dirname(progressPath), { recursive: true });
+        writeFileSync(progressPath, `${line}\n`, "utf8");
+      } catch {
+        // Progress reporting must never be able to kill a training run.
+      }
+      console.log(`  ${line.split(" |")[0]}`);
+
       console.log(
         `  gen ${String(record.generation).padStart(3)}  ` +
-          `best ${record.best.toFixed(4)}  mean ${record.mean.toFixed(4)}  ` +
+          `train best ${record.best.toFixed(4)} mean ${record.mean.toFixed(4)}  ` +
           `species ${String(record.species).padStart(2)}  ` +
+          `div ${record.diversity.toFixed(3)}  ` +
+          `nodes ${record.meanNodes.toFixed(1)}  ` +
+          `conns ${record.meanConnections.toFixed(0)}/${record.meanExpressed.toFixed(0)}  ` +
+          `fp ${record.bestFingerprint}  ` +
           `W/L/D ${record.wins}/${record.losses}/${record.draws}  ` +
           `hof ${String(record.hallOfFame).padStart(2)}  ` +
-          `timeouts ${String(record.timeouts).padStart(3)}  ` +
-          `nodes ${record.meanNodes.toFixed(1)}  conns ${record.meanConnections.toFixed(0)}  ` +
-          (record.validationFitness !== null
-            ? `VAL ${record.validationFitness.toFixed(4)}  `
-            : "") +
           `${(record.durationMs / 1000).toFixed(1)}s`,
       );
+      if (record.validationFitness !== null) {
+        console.log(
+          `           VALIDATION  best ${record.validationFitness.toFixed(4)}  ` +
+            `mean ${(record.validationMean ?? 0).toFixed(4)}  ` +
+            `win% ${(100 * (record.validationWinRate ?? 0)).toFixed(1)}  ` +
+            `place ${(record.validationPlacement ?? 0).toFixed(2)}  ` +
+            `casts/match ${(record.validationCastsPerMatch ?? 0).toFixed(1)}  ` +
+            `champion ${record.championId ?? "—"} ` +
+            `@ ${(record.championValidation ?? 0).toFixed(4)}`,
+        );
+      }
+      if (record.benchmark) {
+        const rows = [...record.benchmark].sort((a, b) => b.fitness - a.fitness);
+        console.log(
+          `           BENCHMARK   ` +
+            rows
+              .map((r) => `${r.name} ${r.fitness.toFixed(3)} (${(100 * r.winRate).toFixed(0)}%)`)
+              .join("  "),
+        );
+      }
     },
   });
 
@@ -192,6 +264,44 @@ function trainCommand(): void {
     console.log(
       `  fitness   best ${first.best.toFixed(4)} -> ${last.best.toFixed(4)}   ` +
         `mean ${first.mean.toFixed(4)} -> ${last.mean.toFixed(4)}`,
+    );
+    console.log(
+      `  diversity ${first.diversity.toFixed(3)} -> ${last.diversity.toFixed(3)}   ` +
+        `species ${first.species} -> ${last.species}`,
+    );
+
+    // The question a fitness curve cannot answer: is this a different network,
+    // or the same one being re-measured against a field that moved?
+    const fingerprints = new Set(result.history.map((r) => r.bestFingerprint));
+    console.log(
+      `  best genome  gen ${first.generation} ${first.bestGenomeId} [${first.bestFingerprint}]  ` +
+        `-> gen ${last.generation} ${last.bestGenomeId} [${last.bestFingerprint}]`,
+    );
+    console.log(
+      `  -> the population's best ${
+        first.bestFingerprint === last.bestFingerprint
+          ? "COMPUTES THE SAME FUNCTION it did at the start — nothing evolved"
+          : "is a different network from the one it started with"
+      } (${fingerprints.size} distinct across ${result.history.length} generations)`,
+    );
+
+    const validated = result.history.filter((r) => r.validationFitness !== null);
+    if (validated.length >= 2) {
+      const firstVal = validated[0]!.validationFitness!;
+      const lastVal = validated[validated.length - 1]!.validationFitness!;
+      console.log(
+        `  validation  ${firstVal.toFixed(4)} (gen ${validated[0]!.generation}) -> ` +
+          `${lastVal.toFixed(4)} (gen ${validated[validated.length - 1]!.generation})   ` +
+          `${lastVal > firstVal ? "improved" : lastVal < firstVal ? "regressed" : "flat"}`,
+      );
+    }
+  }
+
+  const saved = result.cache;
+  if (saved.hits + saved.misses > 0) {
+    console.log(
+      `  memo      ${saved.hits} hits / ${saved.hits + saved.misses} lookups  ` +
+        `— ${saved.matchesSaved.toLocaleString()} matches not replayed`,
     );
   }
 
@@ -213,17 +323,19 @@ function trainCommand(): void {
       config.seed,
       config.balanceConfigId,
     );
-    const report = runBaselines({
+    const runner = createRunner(config.workers);
+    const report = await runBaselines(runner, {
       slate,
       fitness: config.fitness,
       genomes: [{ name: "neat-champion", genome: result.best }],
       seed: config.seed,
     });
+    await runner.close();
     console.log(formatBaselines(report));
   }
 }
 
-function baselineCommand(): void {
+async function baselineCommand(): Promise<void> {
   const config = configFromFlags({ generations: 1, population: 1 });
   const slate = buildSlate(
     flag("generation", 0),
@@ -237,7 +349,9 @@ function baselineCommand(): void {
       `(formats ${config.slate.formats.join(",")}, balance ${config.balanceConfigId})\n`,
   );
   const started = Date.now();
-  const report = runBaselines({ slate, fitness: config.fitness, seed: config.seed });
+  const runner = createRunner(config.workers);
+  const report = await runBaselines(runner, { slate, fitness: config.fitness, seed: config.seed });
+  await runner.close();
   console.log(formatBaselines(report));
   console.log(`\n  ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
@@ -320,10 +434,10 @@ switch (command) {
     xor();
     break;
   case "train":
-    trainCommand();
+    await trainCommand();
     break;
   case "baseline":
-    baselineCommand();
+    await baselineCommand();
     break;
   default:
     console.log(
@@ -356,6 +470,10 @@ switch (command) {
         "  --heuristic            train against fixed personalities instead of self-play",
         "  --rounds-per-format N  self-play matches per genome per format (default 2)",
         "  --hof-share F          fraction of seats given to past champions (default 0.15)",
+        "  --pairing MODE         self-play pairing: shuffle, banded or random (default shuffle)",
+        "  --workers N            match worker threads; 1 runs in-process (default: two thirds of cores)",
+        "  --validation-seeds N   repeats of each validation scenario on independent seeds (default 1)",
+        "  --benchmark-every N    benchmark the champion against the heuristics every N generations (0 = never)",
         "  --seed N               run seed",
       ].join("\n"),
     );

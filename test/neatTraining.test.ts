@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createRunner } from "../simulation/src/training/parallel/runner.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -74,12 +75,12 @@ const FIT = trainingConfig().fitness;
 
 // ── fitness ─────────────────────────────────────────────────────────────
 
-test("placement ranks the winner first and the earliest death last", () => {
+test("placement ranks the winner first and the earliest death last", async () => {
   assert.equal(placementOf(record(), "p0"), 1);
   assert.equal(placementOf(record(), "p1"), 2);
 });
 
-test("winning dominates the formula", () => {
+test("winning dominates the formula", async () => {
   const win = scoreScenario(record(), "p0", context(), FIT);
   const loss = scoreScenario(record(), "p1", context(), FIT);
   assert.equal(win.won, true);
@@ -92,7 +93,7 @@ test("winning dominates the formula", () => {
   );
 });
 
-test("a strong win scores above a weak win", () => {
+test("a strong win scores above a weak win", async () => {
   // Same victory, different quality: healthier castle, better exchange ratio.
   const strong = scoreScenario(
     record(),
@@ -110,7 +111,7 @@ test("a strong win scores above a weak win", () => {
   assert.ok(strong.terms.combat > weak.terms.combat);
 });
 
-test("a draw sits between a win and a loss", () => {
+test("a draw sits between a win and a loss", async () => {
   const drawn = record({ winnerId: null, winnerKingdom: null, players: [
     { id: "p0", name: "a", kingdomId: "water", hp: 0, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: 5_000 },
     { id: "p1", name: "b", kingdomId: "fire", hp: 0, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: 5_000 },
@@ -123,7 +124,7 @@ test("a draw sits between a win and a loss", () => {
   assert.ok(result.score > 0, "but it still scores its shaping terms");
 });
 
-test("placement differences move the score in free-for-all", () => {
+test("placement differences move the score in free-for-all", async () => {
   const seven = (place: number): MatchRecord =>
     record({
       winnerId: "p9",
@@ -147,7 +148,7 @@ test("placement differences move the score in free-for-all", () => {
   assert.ok(second.score > sixth.score);
 });
 
-test("surviving longer breaks ties between losses", () => {
+test("surviving longer breaks ties between losses", async () => {
   const lossAt = (tick: number): MatchRecord =>
     record({ winnerId: "p1", winnerKingdom: "fire", players: [
       { id: "p0", name: "a", kingdomId: "water", hp: 0, shield: 0, citizens: 0, currency: 0, eliminatedAtTick: tick },
@@ -159,7 +160,7 @@ test("surviving longer breaks ties between losses", () => {
   assert.ok(late.terms.survival > early.terms.survival);
 });
 
-test("the damage ratio rewards winning exchanges, not raw damage", () => {
+test("the damage ratio rewards winning exchanges, not raw damage", async () => {
   // Ten times the damage, but taking more than it deals, scores worse than a
   // small clean exchange. Raw damage is farmable — the volcano is a legal
   // target that is not a kingdom.
@@ -172,7 +173,7 @@ test("the damage ratio rewards winning exchanges, not raw damage", () => {
   assert.ok(surgeon.terms.combat > bruiser.terms.combat);
 });
 
-test("a timeout is capped however healthy the castle", () => {
+test("a timeout is capped however healthy the castle", async () => {
   // The turtle guard. Placement ranks timeout survivors by remaining HP, so
   // without it a genome that shields and never attacks places first.
   const timeout = record({
@@ -189,7 +190,7 @@ test("a timeout is capped however healthy the castle", () => {
   assert.equal(result.terms.guardReason, "timeout");
 });
 
-test("a genome that never cast anything scores nothing", () => {
+test("a genome that never cast anything scores nothing", async () => {
   const result = scoreScenario(record(), "p0", context({
     behaviour: { casts: 0, invests: 0, citizens: 0, repairs: 0, shields: 0, retargets: 0, waits: 100, decisions: 100 },
   }), FIT);
@@ -197,14 +198,14 @@ test("a genome that never cast anything scores nothing", () => {
   assert.equal(result.terms.guardReason, "never cast");
 });
 
-test("every score stays within the formula's stated maximum", () => {
+test("every score stays within the formula's stated maximum", async () => {
   const perfect = scoreScenario(record(), "p0", context({
     combat: { damageDealt: 10_000, damageReceived: 0, shieldAbsorbed: 0, kills: 1, healingReceived: 0 },
   }), FIT);
   assert.ok(perfect.score <= maxScore(FIT) + 1e-9, `${perfect.score} exceeds ${maxScore(FIT)}`);
 });
 
-test("terms always reconstruct the score", () => {
+test("terms always reconstruct the score", async () => {
   const result = scoreScenario(record(), "p0", context(), FIT);
   const rebuilt =
     result.terms.win + result.terms.placement + result.terms.survival +
@@ -212,7 +213,7 @@ test("terms always reconstruct the score", () => {
   assert.ok(Math.abs(rebuilt - result.score) < 1e-9, "a score must be explainable from its terms");
 });
 
-test("aggregation preserves the structured detail", () => {
+test("aggregation preserves the structured detail", async () => {
   const scenarios = [
     scoreScenario(record(), "p0", context(), FIT),
     scoreScenario(record(), "p1", context(), FIT),
@@ -228,7 +229,7 @@ test("aggregation preserves the structured detail", () => {
 
 // ── the slate ───────────────────────────────────────────────────────────
 
-test("a slate varies format, kingdom, opponent and seat — not just the seed", () => {
+test("a slate varies format, kingdom, opponent and seat — not just the seed", async () => {
   const config = trainingConfig({
     slate: { ...trainingConfig().slate, formats: ["duel", "ffa4"], seatRotations: 2 },
   });
@@ -241,7 +242,7 @@ test("a slate varies format, kingdom, opponent and seat — not just the seed", 
   assert.equal(new Set(slate.scenarios.map((s) => s.seed)).size, slate.scenarios.length);
 });
 
-test("formats produce the right seat counts", () => {
+test("formats produce the right seat counts", async () => {
   const config = trainingConfig({
     slate: { ...trainingConfig().slate, formats: ["duel", "ffa4", "ffa7"], kingdomsPerGenome: 1, opponents: ["balanced"], seatRotations: 1 },
   });
@@ -256,7 +257,7 @@ test("formats produce the right seat counts", () => {
   }
 });
 
-test("the slate is fixed within a generation and rotates between them", () => {
+test("the slate is fixed within a generation and rotates between them", async () => {
   const config = trainingConfig();
   const first = buildSlate(0, config.slate, config.kingdoms, 1);
   const again = buildSlate(0, config.slate, config.kingdoms, 1);
@@ -266,7 +267,7 @@ test("the slate is fixed within a generation and rotates between them", () => {
   assert.notEqual(first.hash, later.hash, "consecutive generations should differ");
 });
 
-test("the slate hash covers scenario content", () => {
+test("the slate hash covers scenario content", async () => {
   const config = trainingConfig();
   const slate = buildSlate(0, config.slate, config.kingdoms, 1);
   const tampered = { ...slate, scenarios: [...slate.scenarios] };
@@ -274,7 +275,7 @@ test("the slate hash covers scenario content", () => {
   assert.notEqual(hashSlate(tampered), slate.hash);
 });
 
-test("the slate SHAPE hash ignores generation but catches redesign", () => {
+test("the slate SHAPE hash ignores generation but catches redesign", async () => {
   const config = trainingConfig();
   const shape = slateShapeHash(config.slate, config.kingdoms, config.seed);
   // Rotating to another generation must not change the shape…
@@ -298,7 +299,7 @@ const smallSlate = () =>
     },
   });
 
-test("a genome plays real Elementals matches and receives a structured result", () => {
+test("a genome plays real Elementals matches and receives a structured result", async () => {
   const config = smallSlate();
   const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
   const genome = new Population(
@@ -318,7 +319,7 @@ test("a genome plays real Elementals matches and receives a structured result", 
   }
 });
 
-test("damage dealt and received are both observed", () => {
+test("damage dealt and received are both observed", async () => {
   const config = smallSlate();
   const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
   // A heuristic definitely fights, so both sides of the exchange must be nonzero.
@@ -327,7 +328,7 @@ test("damage dealt and received are both observed", () => {
   assert.ok(result.totalDamageReceived > 0, "no damage received was recorded");
 });
 
-test("evaluating the same genome on the same slate is reproducible", () => {
+test("evaluating the same genome on the same slate is reproducible", async () => {
   const config = smallSlate();
   const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
   const genome = new Population(
@@ -346,10 +347,11 @@ test("evaluating the same genome on the same slate is reproducible", () => {
 
 // ── baselines ───────────────────────────────────────────────────────────
 
-test("baselines put every candidate through identical scenarios", () => {
+test("baselines put every candidate through identical scenarios", async () => {
   const config = smallSlate();
   const slate = buildSlate(0, config.slate, config.kingdoms, config.seed);
-  const report = runBaselines({
+  const runner = createRunner(1);
+  const report = await runBaselines(runner, {
     slate,
     fitness: config.fitness,
     personalities: ["balanced"],
@@ -363,7 +365,7 @@ test("baselines put every candidate through identical scenarios", () => {
   assert.match(formatBaselines(report), /candidate/);
 });
 
-test("the fitness function ranks the tuned heuristics correctly", () => {
+test("the fitness function ranks the tuned heuristics correctly", async () => {
   // The floor test, and NOT the one this started as. It began as "a heuristic
   // beats a random network", which is measurably false since the policy became
   // stochastic: across eight random seeds the mean fitness is 1.148 against
@@ -401,14 +403,14 @@ test("the fitness function ranks the tuned heuristics correctly", () => {
 
 // ── training loop ───────────────────────────────────────────────────────
 
-test("a short training run completes and reports its champion", () => {
+test("a short training run completes and reports its champion", async () => {
   const config = trainingConfig({
     mode: "heuristic",
     generations: 2,
     neat: withConfig({ populationSize: 4, activation: "tanh", initialConnectivity: 0.25 }),
     slate: { ...smallSlate().slate, maxTicks: 2_500 },
   });
-  const result = train({ config });
+  const result = await train({ config });
   assert.equal(result.generations, 2);
   assert.equal(result.history.length, 2);
   assert.ok(result.bestResult, "the champion's full result should be kept");
@@ -419,7 +421,7 @@ test("a short training run completes and reports its champion", () => {
   }
 });
 
-test("estimateMatches matches what a run actually plays", () => {
+test("estimateMatches matches what a run actually plays", async () => {
   // estimateMatches describes the HEURISTIC slate; self-play shares matches
   // between genomes, so its budget is tableCount, not population x scenarios.
   const config = trainingConfig({
@@ -428,7 +430,7 @@ test("estimateMatches matches what a run actually plays", () => {
     neat: withConfig({ populationSize: 3, activation: "tanh", initialConnectivity: 0.25 }),
     slate: { ...smallSlate().slate, maxTicks: 2_000 },
   });
-  const result = train({ config });
+  const result = await train({ config });
   assert.equal(
     result.history.reduce((sum, r) => sum + r.matches, 0),
     estimateMatches(config),
@@ -437,7 +439,7 @@ test("estimateMatches matches what a run actually plays", () => {
 
 // ── checkpoints ─────────────────────────────────────────────────────────
 
-test("a checkpoint from a different seed is refused, and named", () => {
+test("a checkpoint from a different seed is refused, and named", async () => {
   const dir = mkdtempSync(join(tmpdir(), "neat-"));
   try {
     const path = join(dir, "checkpoint.json");
@@ -459,7 +461,7 @@ test("a checkpoint from a different seed is refused, and named", () => {
   }
 });
 
-test("a redesigned slate invalidates a checkpoint", () => {
+test("a redesigned slate invalidates a checkpoint", async () => {
   // Fitness only means something next to the matches that produced it.
   const base = localIdentity(trainingConfig());
   const redesigned = localIdentity(
@@ -469,14 +471,14 @@ test("a redesigned slate invalidates a checkpoint", () => {
   assert.ok(mismatches.some((m) => m.startsWith("slateShapeHash")), mismatches.join(", "));
 });
 
-test("a changed balance configuration invalidates a checkpoint", () => {
+test("a changed balance configuration invalidates a checkpoint", async () => {
   const base = localIdentity(trainingConfig());
   const other = localIdentity(trainingConfig({ balanceConfigId: "balance-v3-candidate" }));
   const mismatches = identityMismatches(base, other);
   assert.ok(mismatches.some((m) => m.startsWith("balanceConfigId")), mismatches.join(", "));
 });
 
-test("identity refuses on the observation schema but tolerates a dirty tree", () => {
+test("identity refuses on the observation schema but tolerates a dirty tree", async () => {
   const identity = localIdentity(trainingConfig());
   assert.ok(
     identityMismatches({ ...identity, observationVersion: "v0" }, identity)
@@ -488,7 +490,7 @@ test("identity refuses on the observation schema but tolerates a dirty tree", ()
   );
 });
 
-test("a missing checkpoint is not an error", () => {
+test("a missing checkpoint is not an error", async () => {
   const load = readCheckpointFrom(join(tmpdir(), "definitely-not-here-neat.json"), trainingConfig());
   assert.equal(load.checkpoint, null);
   assert.equal(load.rejected, null);
@@ -496,7 +498,7 @@ test("a missing checkpoint is not an error", () => {
 
 // ── models and difficulty ───────────────────────────────────────────────
 
-test("a trained genome becomes a model carrying full provenance", () => {
+test("a trained genome becomes a model carrying full provenance", async () => {
   const config = trainingConfig();
   const model = toModel(createGenome("champion", ELEMENTALS_SHAPE), config, "hard", 12);
   assert.equal(model.kind, "elementals.ai.model");
@@ -507,7 +509,7 @@ test("a trained genome becomes a model carrying full provenance", () => {
   assert.doesNotThrow(() => assertModelCompatible(model));
 });
 
-test("all three difficulties come from one engine and one genome", () => {
+test("all three difficulties come from one engine and one genome", async () => {
   const config = trainingConfig();
   const genome = createGenome("champion", ELEMENTALS_SHAPE);
   const models = (["easy", "medium", "hard"] as const).map((d) => toModel(genome, config, d, 5));
@@ -517,7 +519,7 @@ test("all three difficulties come from one engine and one genome", () => {
   }
 });
 
-test("the evolution RNG is serializable and resumes mid-stream", () => {
+test("the evolution RNG is serializable and resumes mid-stream", async () => {
   const rng = new NeatRng(12345);
   for (let i = 0; i < 50; i++) rng.next();
   assert.equal(NeatRng.fromState(rng.state).next(), NeatRng.fromState(rng.state).next());
@@ -529,7 +531,7 @@ function readCheckpointFrom(path: string, config: ReturnType<typeof trainingConf
   return readCheckpoint(path, localIdentity(config));
 }
 
-test("the activity reward saturates, so acting cannot be farmed", () => {
+test("the activity reward saturates, so acting cannot be farmed", async () => {
   // It exists to give the flat basin between "did nothing" and "played" a slope.
   // Past the target it must be constant, or a genome learns to spam the cheapest
   // ability instead of learning to win — the failure this project already

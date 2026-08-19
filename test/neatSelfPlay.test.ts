@@ -40,7 +40,7 @@ function countsFor(format: string, populationSize: number, generation = 0): numb
   return counts;
 }
 
-test("match counts are exactly equal when the seats divide the population", () => {
+test("match counts are exactly equal when the seats divide the population", async () => {
   // 28 genomes divide into both duels and fours, so there is no excuse for a
   // difference: a genome judged on more matches than another is being selected
   // partly for its draw.
@@ -52,7 +52,7 @@ test("match counts are exactly equal when the seats divide the population", () =
   }
 });
 
-test("when the seats do not divide the population the surplus is bounded and rotates", () => {
+test("when the seats do not divide the population the surplus is bounded and rotates", async () => {
   // Thirty genomes do not divide into sevens: five tables hold thirty-five
   // seats, so five genomes must play twice. Unavoidable — what matters is that
   // it is at most one extra per round and does not always land on the same
@@ -73,7 +73,7 @@ test("when the seats do not divide the population the surplus is bounded and rot
   assert.notDeepEqual(extrasNow, extrasLater, "the same genomes got the surplus every generation");
 });
 
-test("a population that is not a multiple of the seat count still covers everyone", () => {
+test("a population that is not a multiple of the seat count still covers everyone", async () => {
   // 30 genomes do not divide into sevens. Dropping the tail would leave the last
   // few unevaluated in that format, and unevaluated reads as fitness zero.
   const tables = buildSelfPlayTables(
@@ -87,7 +87,7 @@ test("a population that is not a multiple of the seat count still covers everyon
   for (let i = 0; i < 30; i++) assert.ok(seen.has(i), `genome ${i} never played`);
 });
 
-test("seat counts and kingdoms match the format", () => {
+test("seat counts and kingdoms match the format", async () => {
   const tables = buildSelfPlayTables(0, DEFAULT_SELF_PLAY, 28, KINGDOM_IDS, 0);
   for (const table of tables) {
     assert.equal(table.seatGenomes.length, table.seats);
@@ -96,7 +96,7 @@ test("seat counts and kingdoms match the format", () => {
   }
 });
 
-test("tables are deterministic and rotate between generations", () => {
+test("tables are deterministic and rotate between generations", async () => {
   const a = buildSelfPlayTables(0, DEFAULT_SELF_PLAY, 24, KINGDOM_IDS, 0);
   const again = buildSelfPlayTables(0, DEFAULT_SELF_PLAY, 24, KINGDOM_IDS, 0);
   const later = buildSelfPlayTables(1, DEFAULT_SELF_PLAY, 24, KINGDOM_IDS, 0);
@@ -108,7 +108,7 @@ test("tables are deterministic and rotate between generations", () => {
   );
 });
 
-test("the Hall of Fame takes seats only when it has members", () => {
+test("the Hall of Fame takes seats only when it has members", async () => {
   const without = buildSelfPlayTables(0, DEFAULT_SELF_PLAY, 24, KINGDOM_IDS, 0);
   assert.ok(without.every((t) => t.seatGenomes.every((i) => i >= 0)), "no members, no seats");
 
@@ -119,7 +119,7 @@ test("the Hall of Fame takes seats only when it has members", () => {
   for (const index of hofSeats) assert.ok(-(index + 1) < 3, `bad hall index ${index}`);
 });
 
-test("one match scores every seat", () => {
+test("one match scores every seat", async () => {
   // The efficiency argument, asserted: a seven-seat match must return seven
   // results, not one.
   const population = new Population(
@@ -145,7 +145,7 @@ test("one match scores every seat", () => {
   assert.equal(results.filter((r) => r.result.placement === 1).length, 1);
 });
 
-test("self-play evaluates a whole population and cannot saturate", () => {
+test("self-play evaluates a whole population and cannot saturate", async () => {
   const population = new Population(
     ELEMENTALS_SHAPE,
     withConfig({ ...CONFIG.neat, populationSize: 8 }),
@@ -170,7 +170,7 @@ test("self-play evaluates a whole population and cannot saturate", () => {
   assert.ok(results.some((r) => r.losses > 0), "self-play must produce losers");
 });
 
-test("Hall of Fame members are opposition, not candidates", () => {
+test("Hall of Fame members are opposition, not candidates", async () => {
   // A past champion occupies a seat but its result belongs to no living genome —
   // otherwise it would be selected and bred as though it were in the population.
   const population = new Population(
@@ -193,7 +193,7 @@ test("Hall of Fame members are opposition, not candidates", () => {
 
 // ── the Hall of Fame itself ─────────────────────────────────────────────
 
-test("the Hall of Fame stays bounded and spans the run", () => {
+test("the Hall of Fame stays bounded and spans the run", async () => {
   // "The last N champions" would let a population outrun its own past by
   // improving steadily; an even spread keeps early history in the pool.
   const hall = new HallOfFame(5);
@@ -212,7 +212,7 @@ test("the Hall of Fame stays bounded and spans the run", () => {
   assert.equal(entries[entries.length - 1]!.generation, 39, "so should the latest");
 });
 
-test("the Hall of Fame round-trips through JSON", () => {
+test("the Hall of Fame round-trips through JSON", async () => {
   const hall = new HallOfFame(4);
   const population = new Population(
     ELEMENTALS_SHAPE,
@@ -229,7 +229,7 @@ test("the Hall of Fame round-trips through JSON", () => {
   );
 });
 
-test("budgeting counts matches, and self-play is far cheaper", () => {
+test("budgeting counts matches, and self-play is far cheaper", async () => {
   const perGeneration = tableCount(DEFAULT_SELF_PLAY, 60);
   // Heuristic mode plays one match per genome per scenario: 60 x 12 = 720.
   assert.ok(perGeneration < 200, `expected far fewer than 720, got ${perGeneration}`);
@@ -239,7 +239,7 @@ test("budgeting counts matches, and self-play is far cheaper", () => {
 
 // ── the loop ────────────────────────────────────────────────────────────
 
-test("a self-play run completes and keeps the absolute yardstick", () => {
+test("a self-play run completes and keeps the absolute yardstick", async () => {
   const config = trainingConfig({
     mode: "selfPlay",
     generations: 2,
@@ -249,7 +249,7 @@ test("a self-play run completes and keeps the absolute yardstick", () => {
     selfPlay: { formats: ["duel"], roundsPerFormat: 1, hallOfFameShare: 0.15, maxTicks: 1_500 },
     slate: { ...CONFIG.slate, maxTicks: 1_500 },
   });
-  const result = train({ config });
+  const result = await train({ config });
   assert.equal(result.generations, 2);
   for (const record of result.history) {
     assert.ok(record.matchesPlayed > 0);
@@ -260,7 +260,7 @@ test("a self-play run completes and keeps the absolute yardstick", () => {
   assert.ok(result.history[1]!.hallOfFame > 0, "champions should accumulate");
 });
 
-test("the champion is selected by validation, not by a relative training score", () => {
+test("the champion is selected by validation, not by a relative training score", async () => {
   // The defect this replaced: under self-play, training fitness depends on who a
   // genome was drawn against, so "best ever" crowned a lucky draw at generation
   // 11 of a 60-generation run and nothing could displace it — the number was
@@ -278,7 +278,7 @@ test("the champion is selected by validation, not by a relative training score",
     selfPlay: { formats: ["duel"], roundsPerFormat: 1, hallOfFameShare: 0, maxTicks: 1_200 },
     slate: { ...CONFIG.slate, maxTicks: 1_200 },
   });
-  const result = train({ config });
+  const result = await train({ config });
 
   assert.ok(result.bestValidation !== null, "the champion must carry a validation score");
   // The champion's recorded fitness IS its validation score, so it means the
@@ -296,7 +296,7 @@ test("the champion is selected by validation, not by a relative training score",
   );
 });
 
-test("the champion only improves", () => {
+test("the champion only improves", async () => {
   // Monotonic by construction: a new genome replaces the champion only when its
   // validated score is higher. Without that, a run ends on whatever the last
   // check happened to produce.
@@ -313,7 +313,7 @@ test("the champion only improves", () => {
     selfPlay: { formats: ["duel"], roundsPerFormat: 1, hallOfFameShare: 0, maxTicks: 1_200 },
     slate: { ...CONFIG.slate, maxTicks: 1_200 },
   });
-  const result = train({ config });
+  const result = await train({ config });
   const validations = result.history
     .map((h) => h.validationFitness)
     .filter((v): v is number => v !== null);
@@ -326,7 +326,7 @@ test("the champion only improves", () => {
   }
 });
 
-test("the Hall of Fame is seeded with validated champions", () => {
+test("the Hall of Fame fills while validation also runs", async () => {
   const config = trainingConfig({
     mode: "selfPlay",
     generations: 4,
@@ -340,6 +340,6 @@ test("the Hall of Fame is seeded with validated champions", () => {
     selfPlay: { formats: ["duel"], roundsPerFormat: 1, hallOfFameShare: 0.5, maxTicks: 1_200 },
     slate: { ...CONFIG.slate, maxTicks: 1_200 },
   });
-  const result = train({ config });
+  const result = await train({ config });
   assert.ok(result.history[result.history.length - 1]!.hallOfFame > 0);
 });

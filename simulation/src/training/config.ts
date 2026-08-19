@@ -51,6 +51,36 @@ export interface TrainingConfig {
    * training draw from deciding the run.
    */
   validationCandidates: number;
+  /**
+   * Benchmark the champion against random, the heuristic personalities and the
+   * Hall of Fame every N generations (0 disables).
+   *
+   * STRICTLY A READOUT. The heuristics are no longer the teacher — self-play
+   * decides fitness and the Hall of Fame — but they remain the only ABSOLUTE
+   * reference the run has, because a self-play score of 1.4 in generation 30
+   * does not mean what it meant in generation 0. Without this a population that
+   * merely got worse together is indistinguishable from one that improved.
+   */
+  benchmarkEvery: number;
+  /** Heuristic profiles used as benchmarks, never as training opposition. */
+  benchmarkOpponents: string[];
+  /**
+   * Repeats of every validation scenario on independent seeds.
+   *
+   * The held-out slate is the only absolute yardstick a self-play run has, and
+   * on the 50-generation run its per-check noise (sd ~0.05) was comparable to
+   * the effect being measured (+0.053 between halves). More seeds is the honest
+   * fix: variance falls as 1/sqrt(n) and nothing about what is measured changes.
+   */
+  validationSeeds: number;
+  /**
+   * Worker threads for match execution. 1 runs everything in-process.
+   *
+   * Purely a throughput setting: matches are independent and results are
+   * reassembled in their original order before aggregation, so the number of
+   * workers cannot change a run's outcome. Pinned by an equivalence test.
+   */
+  workers: number;
   /** Kingdoms the run may train on. */
   kingdoms: readonly KingdomId[];
   /**
@@ -91,6 +121,14 @@ export function trainingConfig(overrides: Partial<TrainingConfig> = {}): Trainin
     checkpointEvery: overrides.checkpointEvery ?? 1,
     validateEvery: overrides.validateEvery ?? 5,
     validationCandidates: overrides.validationCandidates ?? 3,
+    benchmarkEvery: overrides.benchmarkEvery ?? 0,
+    workers: overrides.workers ?? 1,
+    validationSeeds: overrides.validationSeeds ?? 1,
+    benchmarkOpponents: overrides.benchmarkOpponents ?? [
+      "balanced",
+      "aggressive",
+      "economic",
+    ],
     kingdoms: overrides.kingdoms ?? KINGDOM_IDS,
     balanceConfigId: overrides.balanceConfigId ?? "baseline",
   };

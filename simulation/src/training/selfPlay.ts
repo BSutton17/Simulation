@@ -52,6 +52,22 @@ export interface SelfPlayTable {
   maxTicks: number;
 }
 
+/**
+ * How a table's opponents are chosen. All three seat DISTINCT genomes.
+ *
+ *  - "shuffle"  partition a per-round shuffle. Every genome plays exactly the
+ *               same number of matches, against uniformly-drawn peers.
+ *  - "banded"   partition the previous generation's fitness ORDER, with local
+ *               jitter. Still equal match counts, but a genome mostly meets
+ *               opponents of its own strength — a Swiss pairing. Narrows the
+ *               spread that comes from who you were drawn against, which is
+ *               self-play's main source of fitness noise.
+ *  - "random"   sample each table independently. Match counts then vary between
+ *               genomes, which is why it is not the default; kept because it is
+ *               the unbiased reference the other two are measured against.
+ */
+export type OpponentSelection = "shuffle" | "banded" | "random";
+
 export interface SelfPlayConfig {
   formats: MatchFormat[];
   /**
@@ -67,6 +83,7 @@ export interface SelfPlayConfig {
   /** Fraction of seats offered to the Hall of Fame, 0 disables it. */
   hallOfFameShare: number;
   maxTicks: number;
+  opponentSelection: OpponentSelection;
 }
 
 export const DEFAULT_SELF_PLAY: SelfPlayConfig = {
@@ -74,6 +91,7 @@ export const DEFAULT_SELF_PLAY: SelfPlayConfig = {
   roundsPerFormat: 2,
   hallOfFameShare: 0.15,
   maxTicks: 12_000,
+  opponentSelection: "shuffle",
 };
 
 /** Deterministic Fisher-Yates over indices, seeded per generation and format. */
@@ -111,30 +129,50 @@ export function buildSelfPlayTables(
   populationSize: number,
   kingdoms: readonly KingdomId[],
   hallOfFameSize: number,
+  /** Genome indices ordered strongest-first. Only "banded" reads it. */
+  ranking?: readonly number[],
 ): SelfPlayTable[] {
   const tables: SelfPlayTable[] = [];
 
   for (const format of config.formats) {
     const seats = FORMAT_SEATS[format];
+    // A genome may never face a copy of itself, so a table needs as many
+    // distinct genomes as it has seats. Refuse loudly rather than quietly seat
+    // someone twice: a population that cannot fill a format is a configuration
+    // mistake, and silently playing mirror matches would corrupt every fitness
+    // reading in the run.
+    if (populationSize < seats) {
+      throw new Error(
+        `population ${populationSize} cannot fill a ${seats}-seat ${format} table ` +
+          `without seating a genome against itself; raise --population or drop the format`,
+      );
+    }
     for (let round = 0; round < config.roundsPerFormat; round++) {
-      const order = shuffled(populationSize, hash(`${generation}:${format}:${round}`));
+      const seed = hash(`${generation}:${format}:${round}`);
+      const order = orderFor(config.opponentSelection, seed, populationSize, seats, ranking);
       for (let start = 0; start < order.length; start += seats) {
-        const seatGenomes: number[] = [];
-        for (let s = 0; s < seats; s++) {
-          // Wrap rather than drop the tail: a population that is not a multiple
-          // of the seat count would otherwise leave its last few genomes
-          // unevaluated in that format.
-          seatGenomes.push(order[(start + s) % order.length]!);
-        }
+        const seatGenomes =
+          config.opponentSelection === "random"
+            ? distinctSeats(shuffled(populationSize, hash(`${seed}:${start}`)), 0, seats)
+            : distinctSeats(order, start, seats);
+
         // Offer some seats to past champions, so a generation cannot drift away
         // from everything that came before it and call that progress.
         if (hallOfFameSize > 0 && config.hallOfFameShare > 0) {
-          const slots = Math.floor(seats * config.hallOfFameShare);
+          // Never more entries than the hall holds (which would seat the same
+          // champion twice) and never the whole table (which would leave no
+          // living genome to score).
+          const slots = Math.min(
+            Math.floor(seats * config.hallOfFameShare),
+            hallOfFameSize,
+            seats - 1,
+          );
           for (let s = 0; s < slots; s++) {
             const which = (generation + round + start + s) % hallOfFameSize;
             seatGenomes[seats - 1 - s] = -(which + 1);
           }
         }
+        assertDistinct(seatGenomes, format, generation, round, start);
 
         const id = `${format}:g${generation}:r${round}:t${start / seats}`;
         tables.push({
@@ -154,6 +192,79 @@ export function buildSelfPlayTables(
     }
   }
   return tables;
+}
+
+/**
+ * Takes `seats` DISTINCT indices from `order`, starting at `start`.
+ *
+ * The tail of a population that does not divide evenly still wraps to the front
+ * — dropping it would leave those genomes unevaluated in that format — but a
+ * wrap that lands on someone already seated walks forward instead of seating
+ * them twice. That is the whole difference between self-play and a genome
+ * playing a mirror of itself, which scores nothing and teaches nothing.
+ */
+function distinctSeats(order: readonly number[], start: number, seats: number): number[] {
+  const chosen: number[] = [];
+  const used = new Set<number>();
+  let cursor = start;
+  while (chosen.length < seats) {
+    const candidate = order[cursor % order.length]!;
+    cursor += 1;
+    if (used.has(candidate)) continue;
+    used.add(candidate);
+    chosen.push(candidate);
+  }
+  return chosen;
+}
+
+/**
+ * Orders the population for one round's partition.
+ *
+ * "banded" keeps the previous generation's ranking but jitters within a small
+ * window, so a genome meets opponents near its own strength without meeting the
+ * identical set every round.
+ */
+function orderFor(
+  mode: OpponentSelection,
+  seed: number,
+  populationSize: number,
+  seats: number,
+  ranking?: readonly number[],
+): number[] {
+  if (mode === "banded" && ranking && ranking.length === populationSize) {
+    const order = [...ranking];
+    const rng = mulberry32(seed);
+    // Shuffle WITHIN contiguous bands rather than swapping neighbours. A
+    // neighbour swap looks local but is not: an element swapped forward can be
+    // swapped forward again when the loop reaches its new position, so it random
+    // walks arbitrarily far and the pairing degenerates to uniform. Measured —
+    // the top-ranked genome came out facing rank 15 of 24.
+    const band = Math.min(order.length, seats * 2);
+    for (let base = 0; base < order.length; base += band) {
+      const end = Math.min(order.length, base + band);
+      for (let i = end - 1; i > base; i--) {
+        const j = base + Math.floor(rng() * (i - base + 1));
+        [order[i], order[j]] = [order[j]!, order[i]!];
+      }
+    }
+    return order;
+  }
+  return shuffled(populationSize, seed);
+}
+
+/** The invariant this whole module rests on: no genome faces a copy of itself. */
+function assertDistinct(
+  seatGenomes: readonly number[],
+  format: MatchFormat,
+  generation: number,
+  round: number,
+  start: number,
+): void {
+  if (new Set(seatGenomes).size === seatGenomes.length) return;
+  throw new Error(
+    `${format} g${generation} r${round} t${start} seated a genome against itself: ` +
+      `[${seatGenomes.join(", ")}]`,
+  );
 }
 
 function hash(text: string): number {
@@ -242,6 +353,58 @@ export function playTable(
   });
 }
 
+/**
+ * Removes mirror matches that distinct INDICES cannot catch.
+ *
+ * A Hall-of-Fame entry is a clone of a past champion, and an elite carried
+ * unchanged through reproduction still holds that champion's id — so a table can
+ * seat index 4 and hall entry 2 and have them be the same player. Distinct
+ * indices are not distinct genomes. Walks to the next hall member that does not
+ * collide; if the hall offers none, the seat falls back to the living genome
+ * rather than mirroring.
+ */
+export function deconflict(
+  table: SelfPlayTable,
+  resolve: (index: number) => Genome,
+  populationSize: number,
+  hallSize: number,
+): SelfPlayTable {
+  const ids = table.seatGenomes.map((index) => resolve(index).id);
+  if (new Set(ids).size === ids.length) return table;
+
+  const seatGenomes = [...table.seatGenomes];
+  const seen = new Set<string>();
+  const seated = new Set<number>(seatGenomes);
+  for (let seat = 0; seat < seatGenomes.length; seat++) {
+    const index = seatGenomes[seat]!;
+    const id = resolve(index).id;
+    if (!seen.has(id)) {
+      seen.add(id);
+      continue;
+    }
+    // Only a Hall-of-Fame seat can collide: living indices are distinct by
+    // construction, so a repeated id means a hall clone met its own elite.
+    let replacement: number | null = null;
+    for (let step = 1; step < hallSize && replacement === null; step++) {
+      const which = (-(index + 1) + step) % hallSize;
+      if (!seen.has(resolve(-(which + 1)).id)) replacement = -(which + 1);
+    }
+    // Hall exhausted: fall back to any unseated living genome, so the table
+    // never plays a mirror even in the corner case.
+    for (let i = 0; i < populationSize && replacement === null; i++) {
+      if (!seated.has(i) && !seen.has(resolve(i).id)) replacement = i;
+    }
+    if (replacement === null) {
+      seen.add(id);
+      continue;
+    }
+    seatGenomes[seat] = replacement;
+    seated.add(replacement);
+    seen.add(resolve(replacement).id);
+  }
+  return { ...table, seatGenomes };
+}
+
 /** Evaluates a whole population by self-play, returning one result per genome. */
 export function evaluatePopulation(
   genomes: readonly Genome[],
@@ -249,23 +412,63 @@ export function evaluatePopulation(
   tables: readonly SelfPlayTable[],
   config: FitnessConfig,
 ): TrainingResult[] {
-  const collected: ScenarioResult[][] = genomes.map(() => []);
   const resolve = (index: number): Genome =>
     index >= 0 ? genomes[index]! : hallOfFame[-(index + 1)]!;
 
-  let rejected = 0;
-  const causes: Record<string, number> = {};
-  for (const table of tables) {
-    for (const entry of playTable(table, resolve, config)) {
+  const seated = seatTables(tables, genomes, hallOfFame);
+  return collectResults(
+    seated.map((table) => playTable(table, resolve, config)),
+    genomes.length,
+  );
+}
+
+/**
+ * Deconflicts every table once, on the parent.
+ *
+ * Split out because the parallel runner needs the tables settled BEFORE they are
+ * dispatched: deconfliction compares genome ids across a table, which a worker
+ * holding only a snapshot could also do, but doing it in one place keeps the
+ * seating decision identical whichever runner plays the match.
+ */
+export function seatTables(
+  tables: readonly SelfPlayTable[],
+  genomes: readonly Genome[],
+  hallOfFame: readonly Genome[],
+): SelfPlayTable[] {
+  const resolve = (index: number): Genome =>
+    index >= 0 ? genomes[index]! : hallOfFame[-(index + 1)]!;
+  return tables.map((table) => deconflict(table, resolve, genomes.length, hallOfFame.length));
+}
+
+/**
+ * Collects seat rows into per-genome results.
+ *
+ * Takes rows ALREADY IN TABLE ORDER. The order matters beyond tidiness: this
+ * pushes into per-genome arrays that `aggregate` then sums, and floating-point
+ * addition is not associative, so a different arrival order would produce
+ * fitnesses that differ in the last bits. The parallel runner restores order
+ * before calling this, which is what makes the two paths byte-identical.
+ */
+export function collectResults(
+  rowsPerTable: readonly (readonly SeatRow[])[],
+  genomeCount: number,
+): TrainingResult[] {
+  const collected: ScenarioResult[][] = Array.from({ length: genomeCount }, () => []);
+  for (const rows of rowsPerTable) {
+    for (const entry of rows) {
       // Hall-of-Fame seats are opposition, not candidates: they are scored so
       // the match resolves, but their results belong to no living genome.
       if (entry.genomeIndex >= 0) collected[entry.genomeIndex]!.push(entry.result);
     }
   }
-  void rejected;
-  void causes;
-
   return collected.map((scenarios) => aggregate(scenarios));
+}
+
+/** One seat's outcome. Mirrors `playTable`'s row so the two paths agree. */
+export interface SeatRow {
+  seat: number;
+  genomeIndex: number;
+  result: ScenarioResult;
 }
 
 /**

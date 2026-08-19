@@ -74,7 +74,7 @@ function fingerprint(snapshot: unknown): string {
   return JSON.stringify(snapshot);
 }
 
-test("a resumed run is byte-identical to an uninterrupted one", () => {
+test("a resumed run is byte-identical to an uninterrupted one", async () => {
   const dir = mkdtempSync(join(tmpdir(), "neat-determinism-"));
   try {
     const N = 4;
@@ -82,16 +82,16 @@ test("a resumed run is byte-identical to an uninterrupted one", () => {
 
     // A: straight through, no checkpoint involved.
     const pathA = join(dir, "a.json");
-    const runA = train({ config: config(), checkpointPath: pathA });
+    const runA = await train({ config: config(), checkpointPath: pathA });
     assert.equal(runA.generations, N);
     const stateA = JSON.parse(readFileSync(pathA, "utf8")) as { population: unknown };
 
     // B: stop at K, then resume to N from the checkpoint on disk.
     const pathB = join(dir, "b.json");
-    const partial = train({ config: config({ generations: K }), checkpointPath: pathB });
+    const partial = await train({ config: config({ generations: K }), checkpointPath: pathB });
     assert.equal(partial.generations, K);
 
-    const resumed = train({ config: config(), checkpointPath: pathB, resume: true });
+    const resumed = await train({ config: config(), checkpointPath: pathB, resume: true });
     assert.equal(resumed.resumedFrom, K, "should have resumed rather than restarted");
     assert.equal(resumed.checkpointRejected, null);
     assert.equal(resumed.history.length, N, "history must span the whole run");
@@ -110,15 +110,15 @@ test("a resumed run is byte-identical to an uninterrupted one", () => {
   }
 });
 
-test("the per-generation record matches across interruption", () => {
+test("the per-generation record matches across interruption", async () => {
   const dir = mkdtempSync(join(tmpdir(), "neat-determinism-"));
   try {
     const pathA = join(dir, "a.json");
-    const runA = train({ config: config(), checkpointPath: pathA });
+    const runA = await train({ config: config(), checkpointPath: pathA });
 
     const pathB = join(dir, "b.json");
-    train({ config: config({ generations: 2 }), checkpointPath: pathB });
-    const runB = train({ config: config(), checkpointPath: pathB, resume: true });
+    await train({ config: config({ generations: 2 }), checkpointPath: pathB });
+    const runB = await train({ config: config(), checkpointPath: pathB, resume: true });
 
     // Timings differ between runs; everything that describes the SEARCH must not.
     const comparable = (h: typeof runA.history) =>
@@ -132,26 +132,26 @@ test("the per-generation record matches across interruption", () => {
   }
 });
 
-test("evolution is reproducible from a seed without any checkpoint", () => {
+test("evolution is reproducible from a seed without any checkpoint", async () => {
   // The weaker property the one above depends on: if plain evolution were not
   // reproducible, resume equivalence could not be either.
-  const run = () => {
-    const result = train({ config: config({ generations: 2 }) });
+  const run = async (): Promise<string[]> => {
+    const result = await train({ config: config({ generations: 2 }) });
     return result.history.map((h) => `${h.best}|${h.mean}|${h.species}|${h.meanConnections}`);
   };
-  assert.deepEqual(run(), run());
+  assert.deepEqual(await run(), await run());
 });
 
-test("a different seed produces a different search", () => {
+test("a different seed produces a different search", async () => {
   // Guards against the reproducibility tests passing because nothing varies.
-  const fingerprintFor = (seed: number): string => {
-    const result = train({ config: config({ generations: 2, seed }) });
+  const fingerprintFor = async (seed: number): Promise<string> => {
+    const result = await train({ config: config({ generations: 2, seed }) });
     return result.history.map((h) => `${h.best}|${h.meanConnections}`).join(";");
   };
-  assert.notEqual(fingerprintFor(101), fingerprintFor(202));
+  assert.notEqual(await fingerprintFor(101), await fingerprintFor(202));
 });
 
-test("the slate a generation runs is reproducible from the run seed", () => {
+test("the slate a generation runs is reproducible from the run seed", async () => {
   const c = config();
   const first = buildSlate(3, c.slate, c.kingdoms, c.seed, c.balanceConfigId);
   const again = buildSlate(3, c.slate, c.kingdoms, c.seed, c.balanceConfigId);
@@ -159,7 +159,7 @@ test("the slate a generation runs is reproducible from the run seed", () => {
   assert.equal(first.hash, again.hash);
 });
 
-test("restoring a population snapshot preserves every evolutionary counter", () => {
+test("restoring a population snapshot preserves every evolutionary counter", async () => {
   // Restore is the mechanism the resume test relies on; this isolates it so a
   // failure says which half broke.
   const c = config();

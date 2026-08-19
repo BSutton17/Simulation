@@ -2,6 +2,7 @@ import { gzipSync, gunzipSync } from "node:zlib";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { SearchCheckpoint } from "../search/index.js";
 import type { EvaluationTier } from "../search/index.js";
+import { identityMismatches } from "./protocol.js";
 import type { ExperimentIdentity, JobRecord, ResultRecord } from "./protocol.js";
 
 /**
@@ -103,6 +104,35 @@ export function credentialsFor(role: ClientRole): { url: string; key: string } {
   return { url, key: secret };
 }
 
+/**
+ * A short, stable fingerprint of everything that makes two runs incomparable.
+ *
+ * Deliberately NOT the seed, population size or sigma: those legitimately
+ * differ between runs a person means to keep apart by name, and folding them in
+ * would give every ordinary parameter tweak its own experiment. This covers
+ * only what can change silently underneath a name — the engine, the schema, the
+ * ability catalog, the fitness definition, the weights and the allocation.
+ */
+const NEWLINE = "\n";
+
+export function identityFingerprint(identity: ExperimentIdentity): string {
+  const material = [
+    identity.engineSha,
+    identity.schemaVersion,
+    identity.catalogHash,
+    identity.scope,
+    identity.fitnessVersion,
+    identity.weightsName,
+    identity.allocation,
+  ].join("|");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < material.length; i++) {
+    h ^= material.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
 export class QueueClient {
   private readonly db: SupabaseClient;
   readonly role: ClientRole;
@@ -126,36 +156,110 @@ export class QueueClient {
 
   // --- coordinator only -----------------------------------------------------
 
-  /** Creates the experiment row, or returns the existing one by name so a
-   *  coordinator restart rejoins its run instead of forking a new one. */
+  /**
+   * Returns the experiment for this build, resuming only when it is genuinely
+   * the same run.
+   *
+   * ⚠️ Looking up by NAME ALONE was the bug this exists to prevent. A restart
+   * needs to rejoin its own run, so the name was the key — but a name says
+   * nothing about what produced the numbers underneath it. When the ability
+   * catalog changed, `elementals-balance-v3-v2-s20260813` still existed, so the
+   * coordinator resumed a run built under catalog f8f4ea6b with a build on
+   * e1370e21, and the contradiction only surfaced later when a WORKER refused
+   * its first batch. By then the coordinator had already adopted the old run's
+   * generation counter.
+   *
+   * So the name selects a CANDIDATE and the identity decides. A row whose
+   * identity differs is not this run and is never resumed; the search moves to
+   * an identity-suffixed name instead and starts clean there.
+   *
+   * The suffix is derived from the identity rather than from a clock or a
+   * random value, deliberately: every coordinator restart on the same build
+   * must land on the same experiment, or a restart would fork the run — which
+   * is the failure the name-based lookup was protecting against in the first
+   * place.
+   */
   async ensureExperiment(
     name: string,
     identity: ExperimentIdentity,
     generationsTarget: number,
-  ): Promise<{ id: string; currentGeneration: number }> {
-    const existing = await this.db
-      .from("experiments").select("id, current_generation").eq("name", name).maybeSingle();
-    if (existing.error) QueueClient.fail("select experiment", existing.error);
-    if (existing.data) {
-      return { id: existing.data.id as string, currentGeneration: existing.data.current_generation as number };
+  ): Promise<{ id: string; currentGeneration: number; name: string; created: boolean }> {
+    // Requested name first so existing compatible runs resume exactly as before;
+    // then the identity-qualified name, which is where an incompatible build
+    // gets its own experiment.
+    const candidates = [name, `${name}-${identityFingerprint(identity)}`];
+    const rejected: string[] = [];
+
+    for (const candidate of candidates) {
+      const existing = await this.db
+        .from("experiments")
+        .select(
+          "id, current_generation, engine_sha, schema_version, catalog_hash, seed, " +
+            "population_size, sigma, scope, fitness_version, weights_name, allocation",
+        )
+        .eq("name", candidate)
+        .maybeSingle();
+      if (existing.error) QueueClient.fail("select experiment", existing.error);
+
+      if (!existing.data) {
+        const created = await this.db.from("experiments").insert({
+          name: candidate,
+          engine_sha: identity.engineSha,
+          schema_version: identity.schemaVersion,
+          catalog_hash: identity.catalogHash,
+          seed: identity.seed,
+          population_size: identity.populationSize,
+          sigma: identity.sigma,
+          scope: identity.scope,
+          fitness_version: identity.fitnessVersion,
+          weights_name: identity.weightsName,
+          allocation: identity.allocation,
+          generations_target: generationsTarget,
+        }).select("id, current_generation").single();
+        if (created.error) QueueClient.fail("insert experiment", created.error);
+        return {
+          id: created.data.id as string,
+          currentGeneration: created.data.current_generation as number,
+          name: candidate,
+          created: true,
+        };
+      }
+
+      const d = existing.data as unknown as Record<string, unknown>;
+      const mismatches = identityMismatches(identity, {
+        engineSha: d.engine_sha as string,
+        schemaVersion: d.schema_version as string,
+        catalogHash: d.catalog_hash as string,
+        seed: d.seed as number,
+        populationSize: d.population_size as number,
+        sigma: d.sigma as number,
+        scope: d.scope as string,
+        fitnessVersion: d.fitness_version as string,
+        weightsName: d.weights_name as string,
+        allocation: d.allocation as string,
+      });
+
+      if (mismatches.length === 0) {
+        return {
+          id: d.id as string,
+          currentGeneration: d.current_generation as number,
+          name: candidate,
+          created: false,
+        };
+      }
+      rejected.push(`  "${candidate}" — ${mismatches.join("; ")}`);
     }
 
-    const created = await this.db.from("experiments").insert({
-      name,
-      engine_sha: identity.engineSha,
-      schema_version: identity.schemaVersion,
-      catalog_hash: identity.catalogHash,
-      seed: identity.seed,
-      population_size: identity.populationSize,
-      sigma: identity.sigma,
-      scope: identity.scope,
-      fitness_version: identity.fitnessVersion,
-      weights_name: identity.weightsName,
-      allocation: identity.allocation,
-      generations_target: generationsTarget,
-    }).select("id, current_generation").single();
-    if (created.error) QueueClient.fail("insert experiment", created.error);
-    return { id: created.data.id as string, currentGeneration: created.data.current_generation as number };
+    // Both names are taken by runs this build does not match. Refusing is the
+    // only safe answer: the alternative is mixing two game configurations in
+    // one curve, which is precisely what the identity check exists to stop.
+    throw new Error(
+      [
+        "cannot start or resume an experiment for this build.",
+        ...rejected,
+        "Pass --name <something-new> to start a fresh run.",
+      ].join(NEWLINE),
+    );
   }
 
   /**

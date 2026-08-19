@@ -51,7 +51,15 @@ ALLOCATION = "v2"
 # Names the experiment. Changing it starts a separate run rather than joining
 # the existing one — which is exactly why V3 has its own name and the previous
 # experiment stays untouched.
-EXPERIMENT_NAME = "elementals-balance-v3-v2-s20260813"
+# Dated per campaign. The balance search now measures over the trained networks
+# instead of the heuristic personalities, and the ability catalog changed with
+# the kingdom rebalance, so this is a new run and not a continuation.
+#
+# The coordinator ALSO refuses to resume an experiment whose identity does not
+# match this build and starts an identity-qualified one instead, so a stale name
+# here is caught rather than silently obeyed. This constant only decides what
+# the run is CALLED.
+EXPERIMENT_NAME = "elementals-balance-v3-v2-s20260819"
 
 # The checkpoint now lives in Supabase (table `checkpoints`), not in a Kaggle
 # Dataset. /kaggle/working is deleted when a session ends, which is how the

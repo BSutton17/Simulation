@@ -4,6 +4,7 @@ import {
   identityMismatches, jobsForGeneration, orderResults, makeWorkerId, backoffMs,
   ProtocolError, type ExperimentIdentity, type ResultRecord,
 } from "../simulation/src/distributed/protocol.js";
+import { identityFingerprint } from "../simulation/src/distributed/client.js";
 import { buildSchema, makeCandidate, baseVector, vectorToParameters,
   type Candidate, type CandidateEvaluation } from "../simulation/src/search/index.js";
 
@@ -145,4 +146,66 @@ test("polling backs off when there is no work, and recovers immediately", () => 
   // Evaluations take minutes; a one-second poll would spend the request budget
   // for nothing.
   assert.ok(backoffMs(0) >= 5_000, "the floor should not be aggressive");
+});
+
+/**
+ * A name is not an identity.
+ *
+ * `ensureExperiment` looked up by name alone and returned whatever it found, so
+ * a coordinator on a new ability catalog resumed a run built on the old one.
+ * The contradiction surfaced later, in a WORKER refusing its first batch, by
+ * which point the coordinator had already adopted the old run's generation
+ * counter. These pin the fingerprint that keeps the two apart.
+ */
+test("the fingerprint changes when the game configuration changes", () => {
+  const base: ExperimentIdentity = {
+    engineSha: "abc123", schemaVersion: "v3", catalogHash: "f8f4ea6b", seed: 20260813,
+    populationSize: 8, sigma: 0.2, scope: "full", fitnessVersion: "v2",
+    weightsName: "default", allocation: "v2",
+  };
+  const same = identityFingerprint(base);
+  assert.equal(identityFingerprint({ ...base }), same, "identical identities must agree");
+
+  // The exact failure that started this: the catalog moved underneath the name.
+  assert.notEqual(
+    identityFingerprint({ ...base, catalogHash: "e1370e21" }),
+    same,
+    "a new ability catalog must not share an experiment with the old one",
+  );
+  for (const field of ["engineSha", "schemaVersion", "scope", "fitnessVersion", "weightsName", "allocation"] as const) {
+    assert.notEqual(
+      identityFingerprint({ ...base, [field]: "CHANGED" }),
+      same,
+      `${field} must change the fingerprint`,
+    );
+  }
+});
+
+test("the fingerprint ignores what a person legitimately varies by name", () => {
+  // Seed, population and sigma are how someone runs two comparable searches on
+  // purpose. Folding them in would give every parameter tweak its own
+  // experiment and defeat resuming entirely.
+  const base: ExperimentIdentity = {
+    engineSha: "abc123", schemaVersion: "v3", catalogHash: "f8f4ea6b", seed: 1,
+    populationSize: 8, sigma: 0.2, scope: "full", fitnessVersion: "v2",
+    weightsName: "default", allocation: "v2",
+  };
+  const same = identityFingerprint(base);
+  assert.equal(identityFingerprint({ ...base, seed: 999 }), same);
+  assert.equal(identityFingerprint({ ...base, populationSize: 32 }), same);
+  assert.equal(identityFingerprint({ ...base, sigma: 0.9 }), same);
+});
+
+test("the fingerprint is stable, so a restart rejoins its own run", () => {
+  // Derived from the identity rather than a clock or a random value: every
+  // coordinator restart on the same build must land on the same experiment, or
+  // a restart forks the run — the very thing name-based lookup protected.
+  const identity: ExperimentIdentity = {
+    engineSha: "36d9ce3eb0", schemaVersion: "v3", catalogHash: "e1370e21", seed: 20260819,
+    populationSize: 8, sigma: 0.2, scope: "full", fitnessVersion: "v2",
+    weightsName: "default", allocation: "v2",
+  };
+  const first = identityFingerprint(identity);
+  assert.equal(first, identityFingerprint(identity));
+  assert.match(first, /^[0-9a-f]{8}$/, "must be a short stable hex suffix");
 });

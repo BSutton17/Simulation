@@ -86,6 +86,16 @@ await assertCoordinatorMatches(client, experiment.id, identity);
 
 log("=".repeat(70));
 log(`EXPERIMENT ID: ${experiment.id}`);
+log(`EXPERIMENT NAME: ${experiment.name}${experiment.created ? "  (created)" : "  (resumed)"}`);
+if (experiment.name !== name) {
+  // Said loudly, because it means an experiment already existed under the
+  // requested name built from a DIFFERENT game configuration. Resuming it would
+  // have mixed two catalogs in one curve; this is a fresh run instead.
+  log("");
+  log(`  NOTE: "${name}" is held by a run this build does not match, so a new`);
+  log(`  experiment was started under an identity-qualified name. Its numbers`);
+  log(`  are NOT comparable to the run under the original name.`);
+}
 log("Give this to every worker notebook (EXPERIMENT_ID in kaggle_worker.py).");
 log("=".repeat(70));
 log("");

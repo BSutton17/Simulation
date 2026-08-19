@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { KINGDOM_IDS } from "../src/data/kingdoms.js";
 import {
+  ACTIVE_POPULATION,
   POPULATION_V1,
   SEED_POOLS,
   allCombinations,
@@ -182,7 +183,9 @@ test("samplers are deterministic in their seed", () => {
 
 test("an evaluation aggregates over the whole strategy population", async () => {
   const result = await evaluate(ffaConfig());
-  const pairings = orderedPairings(POPULATION_V1).length;
+  // The evaluation runs over whichever population is ACTIVE, so the expected
+  // pairing count has to come from the same place the code reads it.
+  const pairings = orderedPairings(ACTIVE_POPULATION).length;
 
   assert.equal(result.duel!.matchups.length, 1);
   for (const m of result.duel!.matchups) {
@@ -194,7 +197,7 @@ test("an evaluation aggregates over the whole strategy population", async () => 
   }
   assert.ok(result.ffa4!.matches > 0);
   assert.equal(result.ffa7, null);
-  assert.equal(result.population.version, POPULATION_V1.version);
+  assert.equal(result.population.version, ACTIVE_POPULATION.version);
 });
 
 test("evaluation is reproducible: same inputs, identical reading", async () => {
@@ -258,7 +261,7 @@ test("every reading records the engine it was taken against", async () => {
   assert.ok(p.engineSha.length > 0);
   assert.ok(p.balanceBaselineHash.length > 0);
   assert.equal(p.kingdomCount, KINGDOM_IDS.length);
-  assert.equal(p.strategyPopulationVersion, POPULATION_V1.version);
+  assert.equal(p.strategyPopulationVersion, ACTIVE_POPULATION.version);
   assert.equal(typeof p.engineDirty, "boolean");
 });
 

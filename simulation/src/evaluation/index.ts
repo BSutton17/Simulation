@@ -29,7 +29,9 @@ export {
 } from "./evaluator.js";
 
 export {
+  ACTIVE_POPULATION,
   POPULATION_V1,
+  POPULATION_V2,
   orderedPairings,
   factoryFor,
   seatProfiles,

@@ -1,4 +1,6 @@
 import { PERSONALITIES } from "../personalities.js";
+import type { Difficulty } from "../ai/index.js";
+import { neatFactory } from "./neatModels.js";
 import { personalityAI } from "../personality.js";
 import type { PersonalityProfile } from "../personality.js";
 import type { AIFactory } from "../types.js";
@@ -27,10 +29,17 @@ export interface StrategyPopulation {
   profiles: readonly StrategyProfile[];
 }
 
-export interface StrategyProfile {
-  id: string;
-  profile: PersonalityProfile;
-}
+/**
+ * One strategy in the population.
+ *
+ * Two kinds, because the measuring instrument changed. The heuristic
+ * personalities are kept so v1 results stay reproducible; new runs use the
+ * trained networks. A profile carries exactly the data its own kind needs and
+ * `factoryFor` is the only place that knows the difference.
+ */
+export type StrategyProfile =
+  | { id: string; kind: "personality"; profile: PersonalityProfile }
+  | { id: string; kind: "neat"; difficulty: Difficulty };
 
 /** One ordered pairing of strategies within a match. */
 export interface ProfilePairing {
@@ -53,9 +62,52 @@ export interface ProfilePairing {
 export const POPULATION_V1: StrategyPopulation = {
   version: "v1",
   profiles: Object.entries(PERSONALITIES)
-    .map(([id, profile]) => ({ id, profile: profile as PersonalityProfile }))
+    .map(([id, profile]) => ({
+      id,
+      kind: "personality" as const,
+      profile: profile as PersonalityProfile,
+    }))
     .sort((x, y) => x.id.localeCompare(y.id)),
 };
+
+/**
+ * The trained population — what new balance runs measure over.
+ *
+ * ⚠️ WHY THE INSTRUMENT CHANGED. Benchmarked on the current balance, the
+ * heuristic personalities finished ZERO of 100 matches: every one hit the tick
+ * cap. A balance reading taken over them therefore ranks candidates by the
+ * timeout tiebreak — who chipped more damage inside a fixed window — not by who
+ * can actually close out a game. The trained networks finish every match, so a
+ * win rate means a win.
+ *
+ * Three difficulties rather than one model in every seat: the population exists
+ * to average over strategies, and a single policy replays the same match every
+ * seed. Easy/Medium/Hard are genuinely different networks from one lineage, so
+ * they disagree about play without being three unrelated players.
+ *
+ * Nine ordered pairings against v1's twenty-five, so a generation is also
+ * substantially cheaper.
+ *
+ * Results under this population are NOT comparable to v1's; the version bump is
+ * what forces a fresh search rather than a misleading resume.
+ */
+export const POPULATION_V2: StrategyPopulation = {
+  version: "v2-neat",
+  profiles: (["easy", "medium", "hard"] as const).map((difficulty) => ({
+    id: `neat-${difficulty}`,
+    kind: "neat" as const,
+    difficulty,
+  })),
+};
+
+/**
+ * The population every default path uses.
+ *
+ * A single named export so the worker, the pool and the planner cannot disagree
+ * about which instrument is in use — a mismatch there would have one side
+ * planning nine pairings while the other refused the version.
+ */
+export const ACTIVE_POPULATION: StrategyPopulation = POPULATION_V2;
 
 /**
  * Every ORDERED pairing, mirrors included — n² for n profiles.
@@ -88,7 +140,7 @@ export function factoryFor(
       `unknown strategy "${id}" in population ${population.version}`,
     );
   }
-  return personalityAI(found.profile);
+  return found.kind === "neat" ? neatFactory(found.difficulty) : personalityAI(found.profile);
 }
 
 /**

@@ -1,7 +1,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { withParameterSet } from "../../../src/engine/parameters.js";
 import type { ParameterSet } from "../../../src/engine/parameters.js";
-import { POPULATION_V1 } from "./population.js";
+import { ACTIVE_POPULATION } from "./population.js";
 import { runJob, type MatchJob, type MatchOutcome } from "./jobs.js";
 
 /**
@@ -37,9 +37,9 @@ export interface WorkerResponse {
 
 const init = workerData as WorkerInit;
 
-if (init.populationVersion !== POPULATION_V1.version) {
+if (init.populationVersion !== ACTIVE_POPULATION.version) {
   throw new Error(
-    `worker population ${POPULATION_V1.version} does not match requested ${init.populationVersion}`,
+    `worker population ${ACTIVE_POPULATION.version} does not match requested ${init.populationVersion}`,
   );
 }
 
@@ -50,7 +50,7 @@ parentPort!.on("message", (request: WorkerRequest) => {
   withParameterSet(init.balance, () => {
     for (const job of request.jobs) {
       try {
-        outcomes.push(runJob(job, POPULATION_V1));
+        outcomes.push(runJob(job, ACTIVE_POPULATION));
       } catch (error) {
         // A crashed match is an infrastructure failure, distinct from a match
         // that legitimately reached its tick cap. Report it; do not drop it.

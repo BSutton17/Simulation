@@ -1,7 +1,7 @@
 import type { ParameterSet } from "../../../src/engine/parameters.js";
 import type { KingdomId } from "../../../src/data/kingdoms.js";
 import {
-  POPULATION_V1,
+  ACTIVE_POPULATION,
   orderedPairings,
   type StrategyPopulation,
 } from "./population.js";
@@ -167,7 +167,7 @@ export { allDuelPairings, balancedDuelPairings };
 
 function resolveConfig(config: EvaluationConfig) {
   return {
-    population: config.population ?? POPULATION_V1,
+    population: config.population ?? ACTIVE_POPULATION,
     seedPool: config.pool ?? ("validation" as SeedPoolName),
     maxTicks: config.maxTicks ?? 24_000,
     duel: { ...DEFAULT_DUEL, ...config.duel },

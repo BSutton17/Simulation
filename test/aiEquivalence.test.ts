@@ -23,16 +23,23 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * Fingerprint of a fixed workload — winners, end ticks and placements across
  * every match, in plan order.
  *
- * Recorded 2026-08-14 against the AI optimisation work (nested resolved-ability
- * cache, single-pass target amplification). It held identical across the
- * unoptimised source, the optimised source, tsx and compiled output.
+ * Re-recorded 2026-08-19 for the kingdom balance change (sixteen ability files
+ * re-exported from the game). A balance change moves every match outcome, which
+ * is exactly the legitimate case this note anticipates — the previous value,
+ * 3ec181861c97925d, was recorded 2026-08-14 against the AI optimisation work and
+ * held identical across unoptimised source, optimised source, tsx and compiled
+ * output.
+ *
+ * The workload itself is deliberately still driven by POPULATION_V1, so this
+ * fingerprint did NOT move when the balance search switched to the trained
+ * networks — see the note in `perf/workload.ts`.
  *
  * If this changes, something altered AI decisions or engine behaviour. That may
  * be legitimate — a balance change or a deliberate AI improvement will move it
  * — but it must never change as a side effect of an optimisation. Re-record it
  * in the same commit as the intended change, and say why in the message.
  */
-const WORKLOAD_FINGERPRINT = "3ec181861c97925d";
+const WORKLOAD_FINGERPRINT = "ed30d3b1a144ff23";
 
 const SMALL = { duelPairings: 2, ffa4Compositions: 1, ffa7Compositions: 1 };
 

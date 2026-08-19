@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  POPULATION_V1,
+  ACTIVE_POPULATION,
   allDuelPairings,
   defaultWorkerCount,
   evaluate,
@@ -91,7 +91,9 @@ test("FFA seat rotation comes from the plan, not a running counter", () => {
 
 test("a job produces the same outcome however it is executed", async () => {
   const job = planEvaluation(parallelConfig(1))[0]!;
-  const direct = runJob(job, POPULATION_V1);
+  // Must be the population the pool itself defaults to, or this compares two
+  // different instruments and fails for a reason that is not a defect.
+  const direct = runJob(job, ACTIVE_POPULATION);
   const viaPool = await executeJobs([job], { workers: 2 });
   assert.deepEqual(viaPool.outcomes.get(job.id), direct);
 });
@@ -173,7 +175,11 @@ test("game timeouts are outcomes, not infrastructure failures", async () => {
   // game result and must appear in the reading, not in `failures`.
   const jobs = planJobs({
     pool: "validation",
-    population: POPULATION_V1,
+    // Planned with the SAME population the pool executes with. Planning against
+    // one roster and running against another is a real error — the worker
+    // cannot resolve a profile id it has never heard of — so the mismatch must
+    // not be baked into a test that is about something else.
+    population: ACTIVE_POPULATION,
     maxTicks: 1,
     duel: { enabled: true, seedsPerPairing: 1, pairings: allDuelPairings().slice(0, 1) },
     ffa4: { enabled: false, seedsPerPairing: 1, compositions: 0, sampler: "coverage" },

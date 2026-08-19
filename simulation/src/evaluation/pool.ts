@@ -2,7 +2,7 @@ import { Worker } from "node:worker_threads";
 import { availableParallelism } from "node:os";
 import { withParameterSet } from "../../../src/engine/parameters.js";
 import type { ParameterSet } from "../../../src/engine/parameters.js";
-import { POPULATION_V1, type StrategyPopulation } from "./population.js";
+import { ACTIVE_POPULATION, type StrategyPopulation } from "./population.js";
 import { runJob, type MatchJob, type MatchOutcome } from "./jobs.js";
 import type { WorkerRequest, WorkerResponse } from "./worker.js";
 
@@ -66,7 +66,7 @@ export async function executeJobs(
   jobs: MatchJob[],
   options: ExecuteOptions = {},
 ): Promise<ExecuteResult> {
-  const population = options.population ?? POPULATION_V1;
+  const population = options.population ?? ACTIVE_POPULATION;
   const balance = options.balance ?? null;
   const completed = options.completed ?? new Map<string, MatchOutcome>();
   const pending = jobs.filter((j) => !completed.has(j.id));

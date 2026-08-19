@@ -28,6 +28,15 @@ const ASSETS = [
     why: "engine identity for provenance",
     required: true,
   },
+  // The balance search plays its matches with the trained networks, so a
+  // compiled deployment that lacks them cannot evaluate anything. Required, not
+  // optional: a Kaggle worker discovering this mid-session wastes the session.
+  ...["easy", "medium", "hard"].map((difficulty) => ({
+    from: `models/${difficulty}.json`,
+    to: `dist/models/${difficulty}.json`,
+    why: `trained ${difficulty} model for the evaluation population`,
+    required: true,
+  })),
 ];
 
 let copied = 0;

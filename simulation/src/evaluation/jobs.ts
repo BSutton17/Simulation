@@ -1,7 +1,7 @@
 import { KINGDOM_IDS, type KingdomId } from "../../../src/data/kingdoms.js";
 import { runHeadlessMatch } from "../headless.js";
 import {
-  POPULATION_V1,
+  ACTIVE_POPULATION,
   factoryFor,
   orderedPairings,
   seatProfiles,
@@ -249,7 +249,7 @@ export function planJobs(options: PlanOptions): MatchJob[] {
  */
 export function runJob(
   job: MatchJob,
-  population: StrategyPopulation = POPULATION_V1,
+  population: StrategyPopulation = ACTIVE_POPULATION,
 ): MatchOutcome {
   const record = runHeadlessMatch({
     players: job.kingdoms.map((kingdomId, i) => ({

@@ -1,3 +1,5 @@
+import { ACTIVE_POPULATION } from "./evaluation/population.js";
+import { describeNeatModels, neatModelsReady } from "./evaluation/neatModels.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
 import { join } from "node:path";
@@ -16,7 +18,7 @@ import { defaultWorkerCount } from "./evaluation/index.js";
  * generation in flight.
  *
  *   npx tsx simulation/src/kaggleSearch.ts \
- *     --generations 40 --population 8 --hours 8 \
+ *     --generations 20 --population 8 --hours 8 \
  *     --out /kaggle/working/run
  *
  * Every artifact lands in --out. Nothing is written back into the repository,
@@ -60,7 +62,7 @@ function parseArgs(argv: string[]): Args {
   };
 
   return {
-    generations: num("generations", 40),
+    generations: num("generations", 20),
     population: optional("population"),
     sigma: num("sigma", 0.2),
     seed: num("seed", 20260813),
@@ -109,6 +111,22 @@ log("=".repeat(70));
 log(`  host           ${cpus().length} logical cores`);
 log(`  workers        ${args.workers}`);
 log(`  generations    ${args.generations}`);
+log(`  population     ${ACTIVE_POPULATION.version} (${ACTIVE_POPULATION.profiles.length} strategies)`);
+{
+  // Preflight. A worker that cannot load a model throws inside a batch, hours
+  // into a session, after the coordinator has already handed out work. Checking
+  // here turns that into a refusal at launch with a path in the message.
+  const neat = ACTIVE_POPULATION.profiles.filter((p) => p.kind === "neat");
+  if (neat.length > 0) {
+    const levels = neat.map((p) => p.difficulty);
+    const ready = neatModelsReady(levels);
+    if (!ready.ok) {
+      console.error(`REFUSING TO START - ${ready.detail}`);
+      process.exit(1);
+    }
+    for (const line of describeNeatModels(levels)) log(`    ${line}`);
+  }
+}
 log(`  population     ${args.population ?? "auto (CMA-ES default)"}`);
 log(`  sigma          ${args.sigma}`);
 log(`  seed           ${args.seed}`);

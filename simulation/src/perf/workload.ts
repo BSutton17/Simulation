@@ -1,4 +1,9 @@
 import { planJobs, runJob, POPULATION_V1, balancedDuelPairings } from "../evaluation/index.js";
+
+// Pinned to POPULATION_V1 is deliberate. This workload exists to detect
+// PERFORMANCE and determinism drift, and its fingerprint is only meaningful if
+// the work itself never changes. Following the active balance population would
+// invalidate every recorded timing the moment the measuring instrument moved.
 import type { MatchJob } from "../evaluation/index.js";
 
 /**

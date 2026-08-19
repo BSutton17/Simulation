@@ -169,13 +169,17 @@ async function trainCommand(): Promise<void> {
         `balance ${config.balanceConfigId}`,
     );
   }
+  // Must mirror the trainer's own construction exactly, seeds included, or the
+  // header advertises a slate the run does not use.
   const validation = buildValidationSlate(config.kingdoms, config.balanceConfigId, {
     maxTicks: config.slate.maxTicks,
+    seedsPerScenario: config.validationSeeds,
   });
   console.log(
     `  validation: ${validation.scenarios.length} frozen scenarios ` +
       `(${slateSeatCost(validation)} seats), top ${config.validationCandidates} genomes ` +
-      `every ${config.validateEvery} generations — the champion is SELECTED by this`,
+      `every ${config.validateEvery} generations (${config.validationSeeds} seed(s)) ` +
+      `— the champion is SELECTED by this`,
   );
   console.log(`  checkpoint: ${checkpointPath}${has("resume") ? " (resuming)" : ""}\n`);
 

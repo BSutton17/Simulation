@@ -30,14 +30,14 @@ export const TOUGH_LOVE: AbilityDefinition = {
   id: "toughLove",
   name: "Tough Love",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 110,
+  cooldownTicks: 1.75 * TICK.RATE, // 1.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 250, element: "love" } },
+    { type: "damage", target: "target", params: { amount: 195, element: "love" } },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 300 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 235 }] } },
     {
       level: 2,
       cost: 250,
@@ -46,7 +46,7 @@ export const TOUGH_LOVE: AbilityDefinition = {
         costMultiplier: 0.85,
       },
     },
-    { level: 3, cost: 400, changes: { effectParams: [{ amount: 400 }] } },
+    { level: 3, cost: 400, changes: { effectParams: [{ amount: 310 }] } },
   ],
 };
 
@@ -72,11 +72,11 @@ export const CUPIDS_ARROW: AbilityDefinition = {
   id: "cupidsArrow",
   name: "Cupid's Arrow",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 10 * TICK.RATE, // 10 s
+  cost: 240,
+  cooldownTicks: 7.5 * TICK.RATE, // 7.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 400, element: "love" } },
+    { type: "damage", target: "target", params: { amount: 280, element: "love" } },
     {
       type: "status",
       target: "target",
@@ -84,7 +84,7 @@ export const CUPIDS_ARROW: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 200, changes: { effectParams: [{ amount: 500 }] } },
+    { level: 1, cost: 200, changes: { effectParams: [{ amount: 350 }] } },
     {
       level: 2,
       cost: 300,

@@ -144,6 +144,15 @@ export interface TrainOptions {
    * serial and parallel paths and diff the histories.
    */
   runner?: MatchRunner;
+  /**
+   * Called whenever a new champion takes the title.
+   *
+   * The checkpoint only ever holds the CURRENT champion, so without this the
+   * intermediate ones are gone — and they are exactly what a difficulty ladder
+   * is made of: genuinely weaker policies from earlier in the same lineage,
+   * rather than one strong policy handicapped at runtime.
+   */
+  onChampion?: (genome: Genome, generation: number, validation: number) => void;
 }
 
 export async function train(options: TrainOptions): Promise<TrainingRunResult> {
@@ -400,6 +409,7 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
           championValidation = bestResult.fitness;
           championGeneration = generation;
           championResult = bestResult;
+          options.onChampion?.(snapshot, generation, bestResult.fitness);
         }
       }
     }

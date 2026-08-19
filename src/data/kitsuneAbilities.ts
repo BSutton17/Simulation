@@ -113,16 +113,16 @@ export const FOX_SWIPE: AbilityDefinition = {
   id: "foxSwipe",
   name: "Fox Swipe",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 110,
+  cooldownTicks: 3.25 * TICK.RATE, // 3.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 250, element: "kitsune" } },
+    { type: "damage", target: "target", params: { amount: 240, element: "kitsune" } },
     // A flat top-up, on top of the damage share "Swift Tails" already credits.
     { type: "chargeMemory", target: "self", params: { memoryCharge: FOX_SWIPE_MEMORY } },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 300 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 290 }] } },
     {
       level: 2,
       cost: 250,
@@ -131,7 +131,7 @@ export const FOX_SWIPE: AbilityDefinition = {
         costMultiplier: 0.85,
       },
     },
-    { level: 3, cost: 400, changes: { effectParams: [{ amount: 400 }] } },
+    { level: 3, cost: 400, changes: { effectParams: [{ amount: 385 }] } },
   ],
 };
 
@@ -144,11 +144,11 @@ export const FOX_FIRE: AbilityDefinition = {
   id: "foxFire",
   name: "Fox Fire",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 12 * TICK.RATE, // 12 s
+  cost: 305,
+  cooldownTicks: 13.25 * TICK.RATE, // 13.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 250, element: "kitsune" } },
+    { type: "damage", target: "target", params: { amount: 215, element: "kitsune" } },
     {
       type: "status",
       target: "target",
@@ -157,7 +157,7 @@ export const FOX_FIRE: AbilityDefinition = {
     { type: "chargeMemory", target: "self", params: { memoryCharge: 25 } },
   ],
   upgradePath: [
-    { level: 1, cost: 200, changes: { effectParams: [{ amount: 350 }] } },
+    { level: 1, cost: 200, changes: { effectParams: [{ amount: 300 }] } },
     {
       level: 2,
       cost: 300,
@@ -166,7 +166,7 @@ export const FOX_FIRE: AbilityDefinition = {
         costMultiplier: 0.85,
       },
     },
-    { level: 3, cost: 400, changes: { effectParams: [{ amount: 600 }] } },
+    { level: 3, cost: 400, changes: { effectParams: [{ amount: 515 }] } },
   ],
 };
 
@@ -180,8 +180,8 @@ export const OLD_FRIENDS: AbilityDefinition = {
   id: "oldFriends",
   name: "Old Friends",
   kind: "attack",
-  cost: 500,
-  cooldownTicks: 35 * TICK.RATE, // 35 s
+  cost: 325,
+  cooldownTicks: 43.25 * TICK.RATE, // 43.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -219,8 +219,8 @@ export const AZURE_GUIDANCE: AbilityDefinition = {
   id: "azureGuidance",
   name: "Azure Guidance",
   kind: "utility",
-  cost: 150,
-  cooldownTicks: 30 * TICK.RATE, // 30 s
+  cost: 170,
+  cooldownTicks: 30.25 * TICK.RATE, // 30.25 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -236,7 +236,7 @@ export const AZURE_GUIDANCE: AbilityDefinition = {
     {
       level: 1,
       cost: 200,
-      changes: { effectParams: [{ durationTicks: 18 * TICK.RATE }] },
+      changes: { effectParams: [{ durationTicks: 160}] },
     },
     {
       level: 2,

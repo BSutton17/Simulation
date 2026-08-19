@@ -50,11 +50,11 @@ export const ACE_OF_SPADES: AbilityDefinition = {
   id: "aceOfSpades",
   name: "Ace of Spades",
   kind: "attack",
-  cost: 125,
-  cooldownTicks: 4 * TICK.RATE, // 4s
+  cost: 135,
+  cooldownTicks: 3.5 * TICK.RATE, // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 250, element: "joker" } },
+    { type: "damage", target: "target", params: { amount: 170, element: "joker" } },
     {
       type: "status",
       target: "self",
@@ -62,7 +62,7 @@ export const ACE_OF_SPADES: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 300 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 205 }] } },
     {
       level: 2,
       cost: 250,
@@ -147,8 +147,8 @@ export const BLACKJACK: AbilityDefinition = {
   id: "blackjack",
   name: "Blackjack",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 15 * TICK.RATE, // 8 s
+  cost: 275,
+  cooldownTicks: 11 * TICK.RATE, // 11 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -230,8 +230,8 @@ export const LUCKY_DRAW: AbilityDefinition = {
   id: "luckyDraw",
   name: "Lucky Draw",
   kind: "utility",
-  cost: 200,
-  cooldownTicks: 30 * TICK.RATE, // 10 s
+  cost: 220,
+  cooldownTicks: 36.5 * TICK.RATE, // 36.5 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -261,7 +261,7 @@ export const LUCKY_DRAW: AbilityDefinition = {
       changes: {
         effectParams: [
           {
-            durationTicks: 30 * TICK.RATE,
+            durationTicks: 395,
             luckyDraw: {
               chance: 1,
               outcomes: [
@@ -303,8 +303,8 @@ export const ROULETTE: AbilityDefinition = {
   id: "roulette",
   name: "Roulette",
   kind: "attack",
-  cost: 400,
-  cooldownTicks: 30 * TICK.RATE, // 22 s
+  cost: 425,
+  cooldownTicks: 30 * TICK.RATE, // 30 s
   targeting: { mode: "singleEnemy" },
   effects: [{ type: "roulette", target: "target", params: {} }],
   upgradePath: [
@@ -332,8 +332,8 @@ export const SLOT_MACHINE: AbilityDefinition = {
   id: "slotMachine",
   name: "Slot Machine",
   kind: "ultimate",
-  cost: 800,
-  cooldownTicks: 90 * TICK.RATE, // 90 s
+  cost: 820,
+  cooldownTicks: 93 * TICK.RATE, // 93 s
   targeting: { mode: "allEnemies" },
   effects: [{ type: "slotMachine", target: "target", params: {} }],
   upgradePath: [

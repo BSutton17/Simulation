@@ -32,16 +32,16 @@ export const SHOOTING_STAR: AbilityDefinition = {
   id: "shootingStar",
   name: "Shooting Star",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 115,
+  cooldownTicks: 2.25 * TICK.RATE, // 2.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 250, element: "space" } },
+    { type: "damage", target: "target", params: { amount: 230, element: "space" } },
     // Feeds the Supernova meter (thresholds 50/150/250 for L1/L2/L3).
     { type: "chargeSupernova", target: "self", params: { supernovaCharge: 25 } },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 300 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 275 }] } },
     {
       level: 2,
       cost: 250,
@@ -50,7 +50,7 @@ export const SHOOTING_STAR: AbilityDefinition = {
         costMultiplier: 0.85,
       },
     },
-    { level: 3, cost: 400, changes: { effectParams: [{ amount: 400 }] } },
+    { level: 3, cost: 400, changes: { effectParams: [{ amount: 370 }] } },
   ],
 };
 
@@ -66,12 +66,12 @@ export const SATURNS_RINGS: AbilityDefinition = {
   id: "saturnsRings",
   name: "Saturn's Rings",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 10 * TICK.RATE, // 10 s
+  cost: 245,
+  cooldownTicks: 11 * TICK.RATE, // 11 s
   targeting: { mode: "singleEnemy" },
   effects: [
     // 9 rings × 50 damage.
-    { type: "damage", target: "target", params: { amount: SATURN_RINGS * 50, element: "space" } },
+    { type: "damage", target: "target", params: { amount: SATURN_RINGS * 30, element: "space" } },
     // 9 rings × 5 charge = 45 meter (nearly a full level).
     { type: "chargeSupernova", target: "self", params: { supernovaCharge: SATURN_RINGS * 5 } },
   ],
@@ -101,8 +101,8 @@ export const SUPERNOVA: AbilityDefinition = {
   id: "supernova",
   name: "Supernova",
   kind: "attack",
-  cost: 400,
-  cooldownTicks: 14 * TICK.RATE, // 14 s
+  cost: 390,
+  cooldownTicks: 13 * TICK.RATE, // 13 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -192,8 +192,8 @@ export const BLACK_HOLE: AbilityDefinition = {
   id: "blackHole",
   name: "Black Hole",
   kind: "ultimate",
-  cost: 1000,
-  cooldownTicks: 90 * TICK.RATE, // 90 s
+  cost: 910,
+  cooldownTicks: 54 * TICK.RATE, // 54 s
   targeting: { mode: "self" },
   effects: [
     { type: "createBlackHole", target: "self", params: { blackHoleDurationTicks: 10 * TICK.RATE } }, // 10 s

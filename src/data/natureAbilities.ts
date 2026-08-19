@@ -118,14 +118,14 @@ export const SLUDGE: AbilityDefinition = {
   id: "sludge",
   name: "Sludge",
   kind: "attack",
-  cost: 150,
+  cost: 200,
   cooldownTicks: 3 * TICK.RATE, // 3 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 250, element: "nature" },
+      params: { amount: 320, element: "nature" },
     },
     {
       type: "status",
@@ -138,7 +138,7 @@ export const SLUDGE: AbilityDefinition = {
       level: 1,
       cost: 200,
       changes: {
-        effectParams: [{ amount: 300 }],
+        effectParams: [{ amount: 385 }],
       },
     },
     {
@@ -153,7 +153,7 @@ export const SLUDGE: AbilityDefinition = {
       level: 3,
       cost: 300,
       changes: {
-        effectParams: [{ amount: 350 }],
+        effectParams: [{ amount: 450 }],
       },
     },
   ],
@@ -164,14 +164,14 @@ export const ACID_RAIN: AbilityDefinition = {
   id: "acidRain",
   name: "Acid Rain",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 10 * TICK.RATE, // 10 s
+  cost: 345,
+  cooldownTicks: 9.75 * TICK.RATE, // 9.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 350, element: "nature" },
+      params: { amount: 335, element: "nature" },
     },
     {
       type: "status",
@@ -184,7 +184,7 @@ export const ACID_RAIN: AbilityDefinition = {
       level: 1,
       cost: 200,
       changes: {
-        effectParams: [{ amount: 450 }],
+        effectParams: [{ amount: 430 }],
       },
     },
     {
@@ -218,14 +218,14 @@ export const GASTRO_ACID: AbilityDefinition = {
   id: "gastroAcid",
   name: "Gastro Acid",
   kind: "attack",
-  cost: 400,
-  cooldownTicks: 15 * TICK.RATE, // 15 s
+  cost: 440,
+  cooldownTicks: 18.5 * TICK.RATE, // 18.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 450, element: "nature" },
+      params: { amount: 405, element: "nature" },
     },
     {
       type: "status",
@@ -244,7 +244,7 @@ export const GASTRO_ACID: AbilityDefinition = {
       level: 1,
       cost: 250,
       changes: {
-        effectParams: [{ amount: 550 }],
+        effectParams: [{ amount: 495 }],
       },
     },
     {
@@ -278,8 +278,8 @@ export const POISON_APPLE: AbilityDefinition = {
   id: "poisonApple",
   name: "Poison Apple",
   kind: "utility",
-  cost: 200,
-  cooldownTicks: 25 * TICK.RATE, // 25 s
+  cost: 155,
+  cooldownTicks: 21 * TICK.RATE, // 21 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -314,7 +314,7 @@ export const TOXIC_GAS: AbilityDefinition = {
   name: "Toxic Gas",
   kind: "ultimate",
   cost: 700,
-  cooldownTicks: 75 * TICK.RATE, // 90 s
+  cooldownTicks: 74.75 * TICK.RATE, // 74.75 s
   targeting: { mode: "allEnemies" },
   effects: [
     {

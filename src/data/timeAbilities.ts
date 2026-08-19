@@ -25,21 +25,21 @@ export const TIK_TOK: AbilityDefinition = {
   id: "tikTok",
   name: "Tik Tok",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 140,
+  cooldownTicks: 3.5 * TICK.RATE, // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 250, element: "time" },
+      params: { amount: 170, element: "time" },
     },
   ],
   upgradePath: [
     {
       level: 1,
       cost: 150,
-      changes: { effectParams: [{ amount: 300 }] },
+      changes: { effectParams: [{ amount: 205 }] },
     },
     {
       level: 2,
@@ -52,7 +52,7 @@ export const TIK_TOK: AbilityDefinition = {
     {
       level: 3,
       cost: 400,
-      changes: { effectParams: [{ amount: 400 }] },
+      changes: { effectParams: [{ amount: 270 }] },
     },
   ],
 };
@@ -81,14 +81,14 @@ export const HALF_PASSED_12: AbilityDefinition = {
   id: "halfPassed12",
   name: "Half Passed 12",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 20 * TICK.RATE, // 10 s
+  cost: 235,
+  cooldownTicks: 27.5 * TICK.RATE, // 27.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 400, element: "time" },
+      params: { amount: 450, element: "time" },
     },
     // TODO(time): the "scramble the UI" effect. The status is applied so the
     // mechanic hook exists; the client scramble visual is a later pass.
@@ -99,8 +99,8 @@ export const HALF_PASSED_12: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 200, changes: { effectParams: [{ amount: 550 }] } },
-    { level: 2, cost: 300, changes: { effectParams: [{ amount: 650 }] } },
+    { level: 1, cost: 200, changes: { effectParams: [{ amount: 620 }] } },
+    { level: 2, cost: 300, changes: { effectParams: [{ amount: 730 }] } },
     {
       level: 3,
       cost: 400,
@@ -146,14 +146,14 @@ export const FATHER_TIME: AbilityDefinition = {
   id: "fatherTime",
   name: "Father Time",
   kind: "attack",
-  cost: 400,
-  cooldownTicks: 20 * TICK.RATE, // 20 s
+  cost: 425,
+  cooldownTicks: 22.25 * TICK.RATE, // 22.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 500, element: "time" },
+      params: { amount: 465, element: "time" },
     },
     {
       type: "status",
@@ -162,8 +162,8 @@ export const FATHER_TIME: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 250, changes: { effectParams: [{ amount: 950 }] } },
-    { level: 2, cost: 400, changes: { effectParams: [{ amount: 1100 }] } },
+    { level: 1, cost: 250, changes: { effectParams: [{ amount: 885 }] } },
+    { level: 2, cost: 400, changes: { effectParams: [{ amount: 1025 }] } },
     {
       level: 3,
       cost: 500,
@@ -189,8 +189,8 @@ export const BLIP: AbilityDefinition = {
   id: "blip",
   name: "Blip!",
   kind: "utility",
-  cost: 200,
-  cooldownTicks: 15 * TICK.RATE, // 15 s
+  cost: 175,
+  cooldownTicks: 9 * TICK.RATE, // 9 s
   targeting: { mode: "self" },
   effects: [
     { type: "undoLastAttack", target: "self", params: {} },

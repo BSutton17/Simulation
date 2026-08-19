@@ -54,7 +54,7 @@ export const LAVA_PUNCH: AbilityDefinition = {
   name: "Lava Punch",
   kind: "attack",
   cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cooldownTicks: 3.5 * TICK.RATE, // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     { type: "damage", target: "target", params: { amount: 250, element: "magma" } },
@@ -85,11 +85,11 @@ export const ERUPTION: AbilityDefinition = {
   id: "eruption",
   name: "Eruption",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 10 * TICK.RATE, // 10 s
+  cost: 230,
+  cooldownTicks: 10.75 * TICK.RATE, // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 450, element: "magma" } },
+    { type: "damage", target: "target", params: { amount: 310, element: "magma" } },
     {
       type: "status",
       target: "target",
@@ -98,7 +98,7 @@ export const ERUPTION: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 200, changes: { effectParams: [{ amount: 500 }] } },
+    { level: 1, cost: 200, changes: { effectParams: [{ amount: 345 }] } },
     {
       level: 2,
       cost: 300,
@@ -107,7 +107,7 @@ export const ERUPTION: AbilityDefinition = {
         costMultiplier: 0.85,
       },
     },
-    { level: 3, cost: 400, changes: { effectParams: [{ amount: 600 }] } },
+    { level: 3, cost: 400, changes: { effectParams: [{ amount: 415 }] } },
   ],
 };
 
@@ -151,8 +151,8 @@ export const FLOOR_IS_LAVA: AbilityDefinition = {
   id: "floorIsLava",
   name: "Floor is Lava",
   kind: "utility",
-  cost: 400,
-  cooldownTicks: 35 * TICK.RATE, // 35 s
+  cost: 325,
+  cooldownTicks: 33.25 * TICK.RATE, // 33.25 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -193,7 +193,7 @@ export const FLOOR_IS_LAVA: AbilityDefinition = {
         // Both entries: the self-buff runs on the lava's clock, so extending
         // one without the other would leave Magma buffed on cold ground.
         effectParams: [
-          { durationTicks: 26 * TICK.RATE }, // 20 s -> 26 s
+          { durationTicks: 270}, // 20 s -> 26 s
           { durationTicks: 26 * TICK.RATE },
         ],
       },
@@ -217,8 +217,8 @@ export const THE_END_OF_THE_WORLD: AbilityDefinition = {
   id: "theEndOfTheWorld",
   name: "The End of the World",
   kind: "ultimate",
-  cost: 1000,
-  cooldownTicks: 120 * TICK.RATE, // 120 s
+  cost: 1095,
+  cooldownTicks: 92.75 * TICK.RATE, // 92.75 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -255,8 +255,8 @@ export const SMOKE_SCREEN: AbilityDefinition = {
   id: "smokeScreen",
   name: "Smoke Screen",
   kind: "utility",
-  cost: 250,
-  cooldownTicks: 25 * TICK.RATE, // 25 s
+  cost: 180,
+  cooldownTicks: 26 * TICK.RATE, // 26 s
   targeting: { mode: "self" },
   effects: [
     {

@@ -46,8 +46,8 @@ export const WATER_BALL: AbilityDefinition = {
   id: "waterBall",
   name: "Water Ball",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 105,
+  cooldownTicks: 3.75 * TICK.RATE, // 3.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -87,14 +87,14 @@ export const WATERFALL: AbilityDefinition = {
   id: "waterfall",
   name: "Waterfall",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 10 * TICK.RATE, // 10 s
+  cost: 320,
+  cooldownTicks: 8.75 * TICK.RATE, // 8.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 450, element: "water", lifesteal: CURRENT_LIFESTEAL },
+      params: { amount: 370, element: "water", lifesteal: CURRENT_LIFESTEAL },
     },
     {
       type: "status",
@@ -107,7 +107,7 @@ export const WATERFALL: AbilityDefinition = {
       level: 1,
       cost: 200,
       changes: {
-        effectParams: [{ amount: 550 }],
+        effectParams: [{ amount: 450 }],
       },
     },
     {
@@ -145,14 +145,14 @@ export const FLOOD: AbilityDefinition = {
   id: "flood",
   name: "Flood",
   kind: "attack",
-  cost: 325,
-  cooldownTicks: 20 * TICK.RATE, // 20 s
+  cost: 315,
+  cooldownTicks: 21.25 * TICK.RATE, // 21.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 800, element: "water", lifesteal: CURRENT_LIFESTEAL },
+      params: { amount: 560, element: "water", lifesteal: CURRENT_LIFESTEAL },
     },
     {
       type: "status",
@@ -172,7 +172,7 @@ export const FLOOD: AbilityDefinition = {
       level: 1,
       cost: 250,
       changes: {
-        effectParams: [{ amount: 950 }],
+        effectParams: [{ amount: 665 }],
       },
     },
     {
@@ -225,14 +225,14 @@ export const FLUID_ASSIMILATION: AbilityDefinition = {
   id: "fluidAssimilation",
   name: "Fluid Assimilation",
   kind: "utility",
-  cost: 175,
-  cooldownTicks: 35 * TICK.RATE, // 25 s
+  cost: 185,
+  cooldownTicks: 34.75 * TICK.RATE, // 34.75 s
   targeting: { mode: "allEnemies" },
   effects: [
     {
       type: "status",
       target: "target",
-      params: { status: ASSIMILATED_STATUS, durationTicks: 5 * TICK.RATE },
+      params: { status: ASSIMILATED_STATUS, durationTicks: 110},
     },
   ],
   upgradePath: [
@@ -259,8 +259,8 @@ export const RIPTIDE: AbilityDefinition = {
   id: "riptide",
   name: "Riptide",
   kind: "ultimate",
-  cost: 1000,
-  cooldownTicks: 210 * TICK.RATE, // 210 s
+  cost: 1135,
+  cooldownTicks: 192 * TICK.RATE, // 192 s
   targeting: { mode: "self" },
   effects: [
     { type: "heal", target: "self", params: { percentMaxHp: 0.5 } },

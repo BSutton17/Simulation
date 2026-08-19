@@ -105,11 +105,11 @@ export const VENOM_SHOT: AbilityDefinition = {
   id: "venomShot",
   name: "Venom Shot",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 120,
+  cooldownTicks: 2.5 * TICK.RATE, // 2.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 250, element: "insects" } },
+    { type: "damage", target: "target", params: { amount: 340, element: "insects" } },
     {
       type: "status",
       target: "target",
@@ -121,7 +121,7 @@ export const VENOM_SHOT: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 300 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 410 }] } },
     {
       level: 2,
       cost: 250,
@@ -145,11 +145,11 @@ export const BUTTERFLIES: AbilityDefinition = {
   id: "butterflies",
   name: "Butterflies",
   kind: "attack",
-  cost: 400,
-  cooldownTicks: 18 * TICK.RATE, // 18 s
+  cost: 395,
+  cooldownTicks: 15 * TICK.RATE, // 15 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 600, element: "insects" } },
+    { type: "damage", target: "target", params: { amount: 560, element: "insects" } },
     {
       type: "status",
       target: "target",
@@ -160,7 +160,7 @@ export const BUTTERFLIES: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 300, changes: { effectParams: [{ amount: 750 }] } },
+    { level: 1, cost: 300, changes: { effectParams: [{ amount: 700 }] } },
     {
       level: 2,
       cost: 400,
@@ -189,11 +189,11 @@ export const INFECTED: AbilityDefinition = {
   id: "infected",
   name: "Infected",
   kind: "attack",
-  cost: 550,
-  cooldownTicks: 24 * TICK.RATE, // 24 s
+  cost: 425,
+  cooldownTicks: 17.5 * TICK.RATE, // 17.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 800, element: "insects" } },
+    { type: "damage", target: "target", params: { amount: 600, element: "insects" } },
     {
       type: "status",
       target: "target",
@@ -204,7 +204,7 @@ export const INFECTED: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 500, changes: { effectParams: [{ amount: 950 }] } },
+    { level: 1, cost: 500, changes: { effectParams: [{ amount: 710 }] } },
     {
       level: 2,
       cost: 600,
@@ -279,8 +279,8 @@ export const CAPRICE: AbilityDefinition = {
   id: "caprice",
   name: "Caprice",
   kind: "ultimate",
-  cost: 900,
-  cooldownTicks: 120 * TICK.RATE, // 120 s
+  cost: 780,
+  cooldownTicks: 163 * TICK.RATE, // 163 s
   targeting: { mode: "self" },
   effects: [
     {

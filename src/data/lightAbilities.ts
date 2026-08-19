@@ -71,15 +71,15 @@ export const LIGHT_BEAM: AbilityDefinition = {
   id: "lightBeam",
   name: "Light Beam",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 75,
+  cooldownTicks: 2.75 * TICK.RATE, // 2.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
       params: {
-        amount: 250,
+        amount: 150,
         element: "light",
         bonusDamageIfTargetHasStatus: {
           statusId: FIREFLIES_STATUS.id,
@@ -89,7 +89,7 @@ export const LIGHT_BEAM: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 300 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 180 }] } },
     {
       level: 2,
       cost: 250,
@@ -126,11 +126,11 @@ export const FIREFLIES: AbilityDefinition = {
   id: "fireflies",
   name: "Fireflies",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 15 * TICK.RATE, // 15 s
+  cost: 240,
+  cooldownTicks: 16.5 * TICK.RATE, // 16.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 300, element: "light" } },
+    { type: "damage", target: "target", params: { amount: 285, element: "light" } },
     {
       type: "status",
       target: "target",
@@ -138,7 +138,7 @@ export const FIREFLIES: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 200, changes: { effectParams: [{ amount: 400 }] } },
+    { level: 1, cost: 200, changes: { effectParams: [{ amount: 380 }] } },
     {
       level: 2,
       cost: 300,
@@ -173,15 +173,15 @@ export const ILLUMINATION: AbilityDefinition = {
   id: "illumination",
   name: "Illumination",
   kind: "attack",
-  cost: 500,
-  cooldownTicks: 20 * TICK.RATE, // 20 s
+  cost: 460,
+  cooldownTicks: 20.5 * TICK.RATE, // 20.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
       params: {
-        amount: 500,
+        amount: 390,
         element: "light",
         // Lit up: a swarmed castle takes considerably more, on top of having
         // its ransom inflated below.
@@ -207,7 +207,7 @@ export const ILLUMINATION: AbilityDefinition = {
       changes: {
         effectParams: [
           {
-            amount: 650,
+            amount: 505,
             bonusDamageIfTargetHasStatus: {
               statusId: FIREFLIES_STATUS.id,
               extraAmount: 450,
@@ -314,8 +314,8 @@ export const LIGHT_SHOW: AbilityDefinition = {
   id: "lightShow",
   name: "Light Show",
   kind: "ultimate",
-  cost: 500,
-  cooldownTicks: 50 * TICK.RATE, // 60 s
+  cost: 495,
+  cooldownTicks: 45.25 * TICK.RATE, // 45.25 s
   targeting: { mode: "self" },
   effects: [
     {

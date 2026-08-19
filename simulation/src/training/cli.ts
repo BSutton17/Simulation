@@ -197,6 +197,21 @@ async function trainCommand(): Promise<void> {
     checkpointPath,
     resume: has("resume"),
     budgetMs: has("hours") ? flag("hours", 1) * 3_600_000 : undefined,
+    onChampion: (genome, generation, validation) => {
+      // One file per champion, so the whole lineage survives the run and a
+      // difficulty ladder can be chosen from measured snapshots afterwards.
+      const dir = `${dirname(checkpointPath)}/champions`;
+      try {
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(
+          `${dir}/gen${String(generation).padStart(4, "0")}-${genome.id}.json`,
+          JSON.stringify({ generation, validation, genome }),
+          "utf8",
+        );
+      } catch {
+        // Snapshotting must never be able to kill a training run.
+      }
+    },
     onGeneration: (record) => {
       completed += 1;
       const elapsed = Date.now() - started;

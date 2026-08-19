@@ -18,14 +18,14 @@ export const ROCK_THROW: AbilityDefinition = {
   id: "rockThrow",
   name: "Rock Throw",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 95,
+  cooldownTicks: 1.75 * TICK.RATE, // 1.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 250, element: "earth" },
+      params: { amount: 280, element: "earth" },
     },
   ],
   upgradePath: [
@@ -33,7 +33,7 @@ export const ROCK_THROW: AbilityDefinition = {
       level: 1,
       cost: 150,
       changes: {
-        effectParams: [{ amount: 275 }],
+        effectParams: [{ amount: 310 }],
       },
     },
     {
@@ -48,7 +48,7 @@ export const ROCK_THROW: AbilityDefinition = {
       level: 3,
       cost: 400,
       changes: {
-        effectParams: [{ amount: 300 }],
+        effectParams: [{ amount: 335 }],
       },
     },
   ],
@@ -72,8 +72,8 @@ export const METEOR_SHOWER: AbilityDefinition = {
   id: "meteorShower",
   name: "Meteor Shower",
   kind: "attack",
-  cost: 225,
-  cooldownTicks: 10 * TICK.RATE, // 10 s
+  cost: 270,
+  cooldownTicks: 10.75 * TICK.RATE, // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [meteorHit(), meteorHit(), meteorHit(), meteorHit(), meteorHit()],
   upgradePath: [
@@ -81,7 +81,7 @@ export const METEOR_SHOWER: AbilityDefinition = {
       level: 1,
       cost: 200,
       changes: {
-        effectParams: allMeteors({ amount: 200 }), // 5 × 150 -> 5 × 200
+        effectParams: allMeteors({ amount: 155 }), // 5 × 150 -> 5 × 200
       },
     },
     {
@@ -116,14 +116,14 @@ export const EARTHQUAKE: AbilityDefinition = {
   id: "earthquake",
   name: "Earthquake",
   kind: "attack",
-  cost: 500,
-  cooldownTicks: 20 * TICK.RATE, // 20 s
+  cost: 595,
+  cooldownTicks: 17.75 * TICK.RATE, // 17.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 750, element: "earth" },
+      params: { amount: 835, element: "earth" },
     },
     {
       type: "damage",
@@ -136,14 +136,14 @@ export const EARTHQUAKE: AbilityDefinition = {
       level: 1,
       cost: 500,
       changes: {
-        effectParams: [{ amount: 800 }],
+        effectParams: [{ amount: 890 }],
       },
     },
     {
       level: 2,
       cost: 600,
       changes: {
-        effectParams: [null, { amount: 300 }], // aftershock 200 -> 300
+        effectParams: [null, { amount: 335 }], // aftershock 200 -> 300
       },
     },
     {
@@ -159,7 +159,7 @@ export const EARTHQUAKE: AbilityDefinition = {
       cost: 800,
       changes: {
         // "Increase aftershock radius" awaits maps — until then, more damage.
-        effectParams: [null, { amount: 400 }],
+        effectParams: [null, { amount: 445 }],
       },
     },
   ],
@@ -197,14 +197,14 @@ export const NATURAL_TERRAIN: AbilityDefinition = {
   id: "naturalTerrain",
   name: "Natural Terrain",
   kind: "utility",
-  cost: 200,
-  cooldownTicks: 30 * TICK.RATE, // 30 s
+  cost: 250,
+  cooldownTicks: 36.75 * TICK.RATE, // 36.75 s
   targeting: { mode: "self" },
   effects: [
     {
       type: "status",
       target: "self",
-      params: { status: NATURAL_TERRAIN_STATUS, durationTicks: 10 * TICK.RATE }, // 10 s
+      params: { status: NATURAL_TERRAIN_STATUS, durationTicks: 140}, // 10 s
     },
   ],
   upgradePath: [
@@ -231,8 +231,8 @@ export const BRICK_WALL: AbilityDefinition = {
   id: "brickWall",
   name: "Brick Wall",
   kind: "ultimate",
-  cost: 750,
-  cooldownTicks: 90 * TICK.RATE, // 90 s
+  cost: 590,
+  cooldownTicks: 99.5 * TICK.RATE, // 99.5 s
   targeting: { mode: "self" },
   effects: [
     { type: "shield", target: "self", params: { amount: 4000 } },

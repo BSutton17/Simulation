@@ -82,7 +82,7 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
   id: "aLightBreeze",
   name: "A Light Breeze",
   kind: "attack",
-  cost: 100,
+  cost: 105,
   cooldownTicks: 3 * TICK.RATE, // 3 s
   targeting: { mode: "singleEnemy" },
   // Bird's Eye View turns a multi-target Breeze into a bouncing gust: full
@@ -93,7 +93,7 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
     {
       type: "damage",
       target: "target",
-      params: { amount: 250, element: "air" },
+      params: { amount: 170, element: "air" },
     },
   ],
   upgradePath: [
@@ -101,7 +101,7 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
       level: 1,
       cost: 150,
       changes: {
-        effectParams: [{ amount: 300 }],
+        effectParams: [{ amount: 205 }],
       },
     },
     {
@@ -116,7 +116,7 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
       level: 3,
       cost: 400,
       changes: {
-        effectParams: [{ amount: 350 }],
+        effectParams: [{ amount: 240 }],
       },
     },
   ],
@@ -128,14 +128,14 @@ export const HURRICANE: AbilityDefinition = {
   id: "hurricane",
   name: "Hurricane",
   kind: "attack",
-  cost: 300,
-  cooldownTicks: 10 * TICK.RATE, // 10 s
+  cost: 295,
+  cooldownTicks: 10.75 * TICK.RATE, // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 400, element: "air" },
+      params: { amount: 445, element: "air" },
     },
     {
       type: "status",
@@ -148,7 +148,7 @@ export const HURRICANE: AbilityDefinition = {
       level: 1,
       cost: 200,
       changes: {
-        effectParams: [{ amount: 450 }],
+        effectParams: [{ amount: 500 }],
       },
     },
     {
@@ -184,15 +184,15 @@ export const THICK_FOG: AbilityDefinition = {
   id: "thickFog",
   name: "Thick Fog",
   kind: "attack",
-  cost: 400,
-  cooldownTicks: 15 * TICK.RATE, // 15 s
+  cost: 290,
+  cooldownTicks: 14.5 * TICK.RATE, // 14.5 s
   targeting: { mode: "singleEnemy" },
   maxConcurrentAffected: { statusId: "vision:fog", limit: 3 },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 550, element: "air" },
+      params: { amount: 485, element: "air" },
     },
     {
       type: "vision",
@@ -205,7 +205,7 @@ export const THICK_FOG: AbilityDefinition = {
       level: 1,
       cost: 250,
       changes: {
-        effectParams: [{ amount: 650 }],
+        effectParams: [{ amount: 575 }],
       },
     },
     {
@@ -274,8 +274,8 @@ export const DUST_BUNNIES: AbilityDefinition = {
   id: "dustBunnies",
   name: "Dust Bunnies",
   kind: "ultimate",
-  cost: 700,
-  cooldownTicks: 90 * TICK.RATE, // 90 s
+  cost: 500,
+  cooldownTicks: 93.25 * TICK.RATE, // 93.25 s
   targeting: { mode: "allEnemies" },
   effects: [
     {

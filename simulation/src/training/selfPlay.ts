@@ -1,3 +1,4 @@
+import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
 import { runHeadlessMatch } from "../headless.js";
 import { mulberry32 } from "../rng.js";
 import { seedFor } from "../evaluation/seeds.js";
@@ -345,6 +346,13 @@ export function playTable(
             waits: seatStats.waits,
             decisions: seatStats.decisions,
             forcedWaits: seatStats.forcedWaits,
+            // From the EVENT STREAM, not the controller: only the network
+            // controller keeps stats, so a heuristic would otherwise look like
+            // it used nothing at all.
+            distinctAbilities: combat.abilitiesUsed.size,
+            kitSize: abilitiesForKingdom(table.kingdoms[seat]!).filter(
+              (a) => a.kind !== "passive",
+            ).length,
           },
         },
         config,

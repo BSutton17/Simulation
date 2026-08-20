@@ -65,8 +65,8 @@ function context(overrides: Partial<ScenarioContext> = {}): ScenarioContext {
     seats: 2,
     kingdom: "water",
     seat: 0,
-    combat: { damageDealt: 5_000, damageReceived: 5_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0 },
-    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 1, shields: 1, retargets: 2, waits: 10, decisions: 100 },
+    combat: { casts: 20, abilitiesUsed: new Set(["waterBall", "waterfall"]), damageDealt: 5_000, damageReceived: 5_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0 },
+    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 1, shields: 1, retargets: 2, waits: 10, decisions: 100, forcedWaits: 0, distinctAbilities: 2, kitSize: 5 },
     ...overrides,
   };
 }
@@ -209,7 +209,8 @@ test("terms always reconstruct the score", async () => {
   const result = scoreScenario(record(), "p0", context(), FIT);
   const rebuilt =
     result.terms.win + result.terms.placement + result.terms.survival +
-    result.terms.combat + result.terms.activity;
+    result.terms.combat + result.terms.activity + result.terms.variety +
+    result.terms.resource;
   assert.ok(Math.abs(rebuilt - result.score) < 1e-9, "a score must be explainable from its terms");
 });
 
@@ -550,4 +551,117 @@ test("the activity reward saturates, so acting cannot be farmed", async () => {
   assert.equal(spamming.terms.activity, busy.terms.activity, "and stop paying at the target");
   // And it stays small enough that it can never outrank winning.
   assert.ok(FIT.activityWeight < FIT.winWeight / 5, "activity must not compete with winning");
+});
+
+
+// ---------------------------------------------------------------------------
+// v3: variety and resource use
+//
+// v1 and v2 rewarded winning, and spamming the cheapest attack wins — measured,
+// it has the best damage-per-gold in nine of sixteen kingdoms. A policy that
+// banks for an ultimate deals less damage while it saves, so evolution learned
+// never to, and sixteen of eighty abilities were never cast in a whole
+// evaluation. v3 pays for RANGE and for spending on defence, without ever
+// saying when to do either.
+// ---------------------------------------------------------------------------
+
+test("v3: winning outranks every other term COMBINED", async () => {
+  // ⚠️ The load-bearing property. Winning is the top priority, and that has to
+  // be arithmetic rather than intention: a win with the worst possible
+  // behaviour must beat a loss with the best possible.
+  const shaping =
+    FIT.placementWeight + FIT.survivalWeight + FIT.combatWeight +
+    FIT.activityWeight + FIT.varietyWeight + FIT.resourceWeight;
+  assert.ok(
+    FIT.winWeight > shaping,
+    `winWeight ${FIT.winWeight} must exceed all shaping terms (${shaping})`,
+  );
+
+  const grudgingWin = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 1, invests: 0, citizens: 0, repairs: 0, shields: 0, retargets: 0, waits: 200, decisions: 200, forcedWaits: 0, distinctAbilities: 1, kitSize: 5 },
+  }), FIT);
+  const gloriousLoss = scoreScenario(record(), "p1", context({
+    behaviour: { casts: 200, invests: 5, citizens: 20, repairs: 5, shields: 5, retargets: 9, waits: 0, decisions: 200, forcedWaits: 0, distinctAbilities: 5, kitSize: 5 },
+  }), FIT);
+  assert.ok(
+    grudgingWin.score > gloriousLoss.score,
+    `a scrappy win (${grudgingWin.score.toFixed(4)}) must beat a stylish loss (${gloriousLoss.score.toFixed(4)})`,
+  );
+});
+
+test("v3: variety pays for RANGE, and repetition adds nothing", async () => {
+  // Casting one ability four hundred times must not substitute for casting a
+  // second one once — otherwise the term is just another way to pay for spam,
+  // which is the behaviour it exists to displace.
+  const spam = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 400, invests: 3, citizens: 5, repairs: 1, shields: 1, retargets: 2, waits: 10, decisions: 400, forcedWaits: 0, distinctAbilities: 1, kitSize: 5 },
+  }), FIT);
+  const range = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 1, shields: 1, retargets: 2, waits: 10, decisions: 400, forcedWaits: 0, distinctAbilities: 5, kitSize: 5 },
+  }), FIT);
+  assert.ok(range.terms.variety > spam.terms.variety, "range must beat repetition");
+  assert.equal(range.terms.variety, FIT.varietyWeight, "a full kit pays the term in full");
+  assert.ok(range.score > spam.score, `range ${range.score} vs spam ${spam.score}`);
+});
+
+test("v3: the resource term saturates, so shields cannot be farmed", async () => {
+  const some = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 0, shields: FIT.resourceTarget, retargets: 2, waits: 10, decisions: 100, forcedWaits: 0, distinctAbilities: 2, kitSize: 5 },
+  }), FIT);
+  const hoard = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 0, shields: 50, retargets: 2, waits: 10, decisions: 100, forcedWaits: 0, distinctAbilities: 2, kitSize: 5 },
+  }), FIT);
+  assert.equal(some.terms.resource, FIT.resourceWeight, "hitting the target pays in full");
+  assert.equal(hoard.terms.resource, some.terms.resource, "past the target it must pay nothing more");
+});
+
+test("v3: nothing dictates WHEN to shield or which ability to cast", async () => {
+  // The terms are outcome-shaped on purpose. Two seats with identical totals
+  // score identically however they got there, so evolution — not the fitness
+  // function — decides the timing. A term that could tell "shielded at low HP"
+  // from "shielded at full HP" would be a hand-written policy in disguise.
+  const a = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 2, shields: 1, retargets: 2, waits: 10, decisions: 100, forcedWaits: 0, distinctAbilities: 3, kitSize: 5 },
+  }), FIT);
+  const b = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 1, shields: 2, retargets: 2, waits: 10, decisions: 100, forcedWaits: 0, distinctAbilities: 3, kitSize: 5 },
+  }), FIT);
+  assert.equal(a.terms.resource, b.terms.resource);
+  assert.equal(a.score, b.score);
+});
+
+test("v3: a genome that never casts still scores nothing", async () => {
+  // The inactivity guard outranks every new term: perfect resource use with no
+  // casts is not play.
+  const idle = scoreScenario(record(), "p0", context({
+    behaviour: { casts: 0, invests: 0, citizens: 0, repairs: 5, shields: 5, retargets: 0, waits: 200, decisions: 200, forcedWaits: 0, distinctAbilities: 0, kitSize: 5 },
+  }), FIT);
+  assert.equal(idle.score, FIT.inactivityScore);
+  assert.equal(idle.terms.guardReason, "never cast");
+});
+
+test("v3: timeouts are ranked against each other, not flattened to one number", async () => {
+  // ⚠️ The clamp version of this cost a whole diagnostic run. Every timed-out
+  // match scored EXACTLY the cap, so in a configuration where matches routinely
+  // stalemate the entire population tied at 0.2500 and selection had nothing to
+  // read — six generations of identical best fitness and a frozen champion,
+  // which looks exactly like a broken search and was a flat scoring function.
+  const timedOut = () => ({ ...record(), timedOut: true, winnerId: null });
+  const wellPlayed = scoreScenario(timedOut(), "p0", context({
+    behaviour: { casts: 40, invests: 3, citizens: 5, repairs: 2, shields: 3, retargets: 2, waits: 10, decisions: 200, forcedWaits: 0, distinctAbilities: 5, kitSize: 5 },
+  }), FIT);
+  const barelyPlayed = scoreScenario(timedOut(), "p0", context({
+    behaviour: { casts: 1, invests: 0, citizens: 0, repairs: 0, shields: 0, retargets: 0, waits: 200, decisions: 200, forcedWaits: 0, distinctAbilities: 1, kitSize: 5 },
+  }), FIT);
+
+  assert.equal(wellPlayed.timedOut, true);
+  assert.ok(
+    wellPlayed.score > barelyPlayed.score,
+    `two stalemates must still be rankable: ${wellPlayed.score} vs ${barelyPlayed.score}`,
+  );
+  // ...and the ceiling is still exactly where it was, so a stalemate can never
+  // pay like a win. That is the whole point of the cap.
+  assert.ok(wellPlayed.score <= FIT.timeoutCap + 1e-9, "a timeout must not exceed the cap");
+  const win = scoreScenario(record(), "p0", context(), FIT);
+  assert.ok(win.score > wellPlayed.score, "the best stalemate must lose to any win");
 });

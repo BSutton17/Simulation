@@ -32,6 +32,15 @@ export interface SeatCombat {
    * and is what actually happened.
    */
   casts: number;
+  /**
+   * Which abilities this seat cast, not merely how many times.
+   *
+   * The distinction the whole variety term rests on. A genome that casts its
+   * cheapest attack four hundred times has four hundred casts and ONE ability;
+   * counting only the total made those indistinguishable, and the search
+   * correctly concluded that spam was the cheapest way to look active.
+   */
+  abilitiesUsed: Set<string>;
   damageDealt: number;
   damageReceived: number;
   /** Damage absorbed by this seat's shields (part of `damageReceived`). */
@@ -41,7 +50,7 @@ export interface SeatCombat {
 }
 
 function empty(): SeatCombat {
-  return { casts: 0, damageDealt: 0, damageReceived: 0, shieldAbsorbed: 0, kills: 0, healingReceived: 0 };
+  return { casts: 0, abilitiesUsed: new Set<string>(), damageDealt: 0, damageReceived: 0, shieldAbsorbed: 0, kills: 0, healingReceived: 0 };
 }
 
 /**
@@ -74,7 +83,9 @@ export class CombatObserver implements SimulationObserver {
   onEvent(event: GameplayEvent): void {
     switch (event.type) {
       case "abilityCast": {
-        this.seat(event.casterId).casts += 1;
+        const seat = this.seat(event.casterId);
+        seat.casts += 1;
+        seat.abilitiesUsed.add(event.abilityId);
         break;
       }
       case "damage": {

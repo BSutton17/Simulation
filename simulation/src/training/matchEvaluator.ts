@@ -1,3 +1,4 @@
+import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
 import { runHeadlessMatch } from "../headless.js";
 import { PERSONALITIES } from "../personalities.js";
 import { personalityAI, type PersonalityProfile } from "../personality.js";
@@ -165,6 +166,13 @@ export function playScenario(
         repairs: stats.repairs, shields: stats.shields, retargets: stats.retargets,
         waits: stats.waits, decisions: stats.decisions,
         forcedWaits: stats.forcedWaits,
+        // From the EVENT STREAM, not the controller: only the network controller
+        // keeps stats, so a heuristic baseline would otherwise report using no
+        // abilities at all and be scored as if it had done nothing.
+        distinctAbilities: combat.abilitiesUsed.size,
+        kitSize: abilitiesForKingdom(scenario.candidateKingdom).filter(
+          (a) => a.kind !== "passive",
+        ).length,
       },
     },
     config,

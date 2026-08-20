@@ -11,6 +11,9 @@ export type MatchPhase = "lobby" | "starting" | "active" | "ended";
  * economy, abilities, statuses…) is layered on separately as those systems land
  * (see DATA_MODELS.md → Player and the `player/` folder).
  */
+/** The three shipped bot strengths, each backed by its own trained model. */
+export type BotDifficulty = "easy" | "medium" | "hard";
+
 export interface MatchPlayer {
   /** Stable player id (persists across reconnects within a match). */
   id: string;
@@ -30,6 +33,18 @@ export interface MatchPlayer {
   ready: boolean;
   /** Whether the player currently has a live connection. */
   connected: boolean;
+  /**
+   * True when this seat is driven by a trained AI rather than a person.
+   *
+   * An explicit flag, never inferred from the name — a player calling
+   * themselves "BOT" must not become one, and a bot must stay a bot when
+   * renamed. Everything else about the seat is unchanged: a bot holds a normal
+   * MatchPlayer, occupies a normal seat, picks a normal kingdom, and counts
+   * toward the same capacity limits, because it plays the same game.
+   */
+  isBot?: boolean;
+  /** Which trained model drives it. Meaningless unless `isBot`. */
+  botDifficulty?: BotDifficulty;
   /** A spectator watches the match without a kingdom/castle — never gets a
    *  gameplay PlayerState, doesn't count toward the active-player cap or the
    *  start requirements. The 8th seat can only ever be a spectator. */

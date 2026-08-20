@@ -15,7 +15,7 @@ import type { SeatCombat } from "./matchObserver.js";
  * becomes something nobody can reason about and a policy learns to farm.
  */
 
-export const AI_FITNESS_VERSION = "v3";
+export const AI_FITNESS_VERSION = "v4";
 
 /** Everything one evaluation match produced. Kept whole, not reduced to a number. */
 export interface ScenarioResult {
@@ -160,9 +160,25 @@ export interface FitnessConfig {
 
 export const DEFAULT_FITNESS: FitnessConfig = {
   winWeight: 1,
-  placementWeight: 0.35,
+  // ⚠️ PLACEMENT AND COMBAT WERE CUT to pay for variety, and the cut is the
+  // point rather than a side effect. Both reward "did damage" — placement ranks
+  // timeout survivors by remaining HP, combat by share of damage exchanged — so
+  // both were REINFORCING the behaviour variety exists to displace. Spamming
+  // the cheapest attack maximises damage per second, which is exactly how these
+  // two terms are earned.
+  //
+  // Measured at the old weights over 250 generations: kit reach sat at 2.7 of 5
+  // and never moved, while the champion's win rate climbed. Evolution optimised
+  // what was worth the most, which was damage. Outbidding that by raising
+  // variety alone would have pushed the shaping terms past winWeight and let a
+  // stylish loss beat a scrappy win; taking the budget from the terms that
+  // cause the problem keeps winning on top AND removes the incentive.
+  //
+  // was 0.35
+  placementWeight: 0.2,
   survivalWeight: 0.1,
-  combatWeight: 0.15,
+  // was 0.15
+  combatWeight: 0.1,
   timeoutCap: 0.25,
   inactivityScore: 0,
   // Deliberately smaller than every other term: it exists to leave the
@@ -170,12 +186,12 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   activityWeight: 0.08,
   activityTarget: 20,
   // ⚠️ WINNING MUST REMAIN THE TOP PRIORITY, and that is an arithmetic property
-  // rather than an intention: every non-win term sums to 0.86, which is less
+  // rather than an intention: every non-win term sums to 0.84, which is less
   // than winWeight's 1.0. So a win with the worst possible resource use still
-  // outscores a loss with the best possible. The margin is deliberately kept —
-  // `everyTermTogetherCannotOutrankAWin` in the tests fails if a future weight
-  // erodes it.
-  varietyWeight: 0.12,
+  // outscores a loss with the best possible. The margin survived raising
+  // variety from 0.12 to 0.30 only because placement and combat paid for it —
+  // raising variety alone would have totalled 1.04 and inverted the rule.
+  varietyWeight: 0.3,
   resourceWeight: 0.06,
   resourceTarget: 3,
 };

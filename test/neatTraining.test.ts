@@ -8,6 +8,7 @@ import {
   ELEMENTALS_SHAPE,
   aggregate,
   buildSlate,
+  championWouldRegress,
   estimateMatches,
   evaluateCandidate,
   evaluateGenome,
@@ -664,4 +665,62 @@ test("v3: timeouts are ranked against each other, not flattened to one number", 
   assert.ok(wellPlayed.score <= FIT.timeoutCap + 1e-9, "a timeout must not exceed the cap");
   const win = scoreScenario(record(), "p0", context(), FIT);
   assert.ok(win.score > wellPlayed.score, "the best stalemate must lose to any win");
+});
+
+
+// ---------------------------------------------------------------------------
+// v4: winning may plateau, but it may not slide
+//
+// Raising variety to 0.30 bought reach at a price: a candidate can now
+// out-score the incumbent on kit breadth while winning fewer matches. The
+// champion guard refuses exactly that trade, and nothing else.
+// ---------------------------------------------------------------------------
+
+test("v4: a candidate that wins meaningfully less is refused the title", async () => {
+  // 96 validation matches → one standard error is sqrt(0.25/96) ≈ 0.051.
+  const MATCHES = 96;
+
+  // A real slide, well past the noise band.
+  assert.ok(
+    championWouldRegress(0.40, MATCHES, 0.53),
+    "a 13-point drop in win rate must be refused",
+  );
+
+  // ⚠️ Stagnation is NOT regression. Winning holding flat while variety climbs
+  // is the outcome we are explicitly willing to accept, so it must pass.
+  assert.ok(
+    !championWouldRegress(0.53, MATCHES, 0.53),
+    "an identical win rate must still be allowed to take the title",
+  );
+  assert.ok(
+    !championWouldRegress(0.60, MATCHES, 0.53),
+    "and an improvement obviously must",
+  );
+
+  // Noise must not block a successor: a one-match difference over 96 is far
+  // inside one standard error.
+  assert.ok(
+    !championWouldRegress(0.53 - 1 / MATCHES, MATCHES, 0.53),
+    "a single match of sampling noise must not veto a champion",
+  );
+});
+
+test("v4: the guard tolerates more noise when it has measured less", async () => {
+  // The band is sqrt(0.25/n), so it must WIDEN as the sample shrinks —
+  // otherwise a short validation slate would reject successors at random.
+  const drop = 0.53 - 0.45;
+  assert.ok(
+    !championWouldRegress(0.45, 16, 0.53),
+    `over 16 matches an ${drop.toFixed(2)} gap is inside the noise band`,
+  );
+  assert.ok(
+    championWouldRegress(0.45, 400, 0.53),
+    "but over 400 matches the same gap is a real regression",
+  );
+});
+
+test("v4: the first champion faces no floor", async () => {
+  // There is no incumbent to regress against, so nothing may block the run
+  // from ever crowning anyone.
+  assert.ok(!championWouldRegress(0.0, 96, null), "a null incumbent imposes no floor");
 });

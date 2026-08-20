@@ -99,6 +99,7 @@ export {
 } from "./checkpoint.js";
 
 export {
+  championWouldRegress,
   estimateMatches,
   toModel,
   train,

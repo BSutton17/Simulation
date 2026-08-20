@@ -39,6 +39,35 @@ import {
  * rather than restructuring the loop — the same shape `search/run.ts` uses.
  */
 
+/**
+ * Would crowning this candidate REGRESS the champion's win rate?
+ *
+ * Variety is worth 0.30 of a 1.84 scale, which is enough for a candidate to
+ * out-score the incumbent on kit reach while quietly winning fewer matches.
+ * Crowning it would trade the thing that matters for the thing being
+ * encouraged.
+ *
+ * ⚠️ THIS REFUSES REGRESSION, NOT STAGNATION. Winning plateauing while variety
+ * climbs is an acceptable outcome and must stay reachable — otherwise the guard
+ * would freeze the champion the moment win rate topped out, which is exactly
+ * when there is most left to gain elsewhere.
+ *
+ * The tolerance is one standard error of a win rate over `matches` samples,
+ * sqrt(0.25/n) — the widest it can be, since p(1-p) peaks at p=0.5. Ordinary
+ * sampling noise therefore cannot block a genuine improvement, while a
+ * systematic slide is caught.
+ */
+export function championWouldRegress(
+  candidateWinRate: number,
+  matches: number,
+  incumbentWinRate: number | null,
+): boolean {
+  if (incumbentWinRate === null) return false;
+  if (matches <= 0) return false;
+  const noise = Math.sqrt(0.25 / matches);
+  return candidateWinRate < incumbentWinRate - noise;
+}
+
 export interface GenerationRecord extends GenerationReport {
   wins: number;
   losses: number;
@@ -104,6 +133,13 @@ export interface GenerationRecord extends GenerationReport {
   benchmark: BenchmarkRow[] | null;
   /** Matches this generation did NOT play because a memo already had them. */
   matchesSaved: number;
+  /**
+   * A better-scoring candidate was refused the title because it won less.
+   *
+   * Variety is worth enough to out-score the incumbent while winning fewer
+   * matches; this records when that actually happened.
+   */
+  championRefusedOnWinRate: boolean;
   durationMs: number;
 }
 
@@ -270,6 +306,24 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
   // whoever a genome was drawn against, so "best ever" crowns a lucky draw and
   // then nothing can displace it, because the number was never comparable.
   let championValidation: number | null = restoredChampionValidation;
+  /**
+   * The standing champion's WIN RATE, and the floor a successor must clear.
+   *
+   * ⚠️ Variety is now worth 0.30 of a 1.84 scale, which is enough for a
+   * candidate to out-score the incumbent on kit reach while quietly winning
+   * fewer matches. Selecting it would trade the thing that matters for the
+   * thing being encouraged — the exact failure the balance search made when it
+   * pushed dead abilities further out of reach to satisfy a parity objective.
+   *
+   * So a successor must not REGRESS on win rate. Not "must improve": winning
+   * plateauing while variety climbs is a fine outcome and the run should be
+   * free to take it. Only a meaningful drop is refused.
+   *
+   * The tolerance is one standard error of a win rate measured over the
+   * validation slate — sqrt(0.25/n) — so ordinary sampling noise does not block
+   * a genuine improvement, while a systematic slide does.
+   */
+  let championWinRate: number | null = null;
   // Only populated when the champion is found in THIS session: the per-scenario
   // detail is far too large to carry in a checkpoint, and the genome is what a
   // model actually needs.
@@ -380,6 +434,10 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
     let validationCastsPerMatch: number | null = null;
     let validationDistinctAbilities: number | null = null;
     let validationKitSize: number | null = null;
+    // Surfaced in the record: a run that keeps refusing successors is telling
+    // you the fitness is pulling against itself, and that is worth seeing while
+    // it happens rather than reconstructing afterwards.
+    let championRefusedOnWinRate = false;
     if (validationSlate && config.validateEvery > 0 && generation % config.validateEvery === 0) {
       const ranked = results
         .map((result, index) => ({ fitness: result.fitness, index }))
@@ -428,13 +486,26 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
             : 0;
         validationKitSize =
           bestResult.scenarios.length > 0 ? bestResult.scenarios[0]!.kitSize : 0;
-        if (championValidation === null || bestResult.fitness > championValidation) {
+        const candidateWinRate =
+          bestResult.matches > 0 ? bestResult.wins / bestResult.matches : 0;
+        const wouldRegress = championWouldRegress(
+          candidateWinRate,
+          bestResult.matches,
+          championWinRate,
+        );
+        if (wouldRegress) championRefusedOnWinRate = true;
+
+        if (
+          !wouldRegress &&
+          (championValidation === null || bestResult.fitness > championValidation)
+        ) {
           const snapshot = cloneGenome(bestGenome);
           snapshot.fitness = bestResult.fitness;
           champion = snapshot;
           championValidation = bestResult.fitness;
           championGeneration = generation;
           championResult = bestResult;
+          championWinRate = candidateWinRate;
           options.onChampion?.(snapshot, generation, bestResult.fitness);
         }
       }
@@ -512,6 +583,7 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
       championValidation,
       benchmark,
       matchesSaved: cache.stats.matchesSaved - savedBefore,
+      championRefusedOnWinRate,
       durationMs: Date.now() - generationStarted,
     };
     history.push(record);

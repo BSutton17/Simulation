@@ -263,6 +263,7 @@ async function trainCommand(): Promise<void> {
             `place ${(record.validationPlacement ?? 0).toFixed(2)}  ` +
             `casts/match ${(record.validationCastsPerMatch ?? 0).toFixed(1)}  ` +
             `KIT ${(record.validationDistinctAbilities ?? 0).toFixed(1)}/${record.validationKitSize ?? 0}  ` +
+            `${record.championRefusedOnWinRate ? "[REFUSED: would lose more] " : ""}` +
             `champion ${record.championId ?? "—"} ` +
             `@ ${(record.championValidation ?? 0).toFixed(4)}`,
         );

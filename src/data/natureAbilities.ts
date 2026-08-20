@@ -118,14 +118,14 @@ export const SLUDGE: AbilityDefinition = {
   id: "sludge",
   name: "Sludge",
   kind: "attack",
-  cost: 200,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 280,
+  cooldownTicks: Math.round(1.85 * TICK.RATE), // 3 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 320, element: "nature" },
+      params: { amount: 330, element: "nature" },
     },
     {
       type: "status",
@@ -164,14 +164,14 @@ export const ACID_RAIN: AbilityDefinition = {
   id: "acidRain",
   name: "Acid Rain",
   kind: "attack",
-  cost: 345,
-  cooldownTicks: 9.75 * TICK.RATE, // 9.75 s
+  cost: 412,
+  cooldownTicks: Math.round(5.85 * TICK.RATE), // 9.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 335, element: "nature" },
+      params: { amount: 201, element: "nature" },
     },
     {
       type: "status",
@@ -218,14 +218,14 @@ export const GASTRO_ACID: AbilityDefinition = {
   id: "gastroAcid",
   name: "Gastro Acid",
   kind: "attack",
-  cost: 440,
-  cooldownTicks: 18.5 * TICK.RATE, // 18.5 s
+  cost: 420,
+  cooldownTicks: Math.round(19.2 * TICK.RATE), // 18.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 405, element: "nature" },
+      params: { amount: 286, element: "nature" },
     },
     {
       type: "status",
@@ -278,8 +278,8 @@ export const POISON_APPLE: AbilityDefinition = {
   id: "poisonApple",
   name: "Poison Apple",
   kind: "utility",
-  cost: 155,
-  cooldownTicks: 21 * TICK.RATE, // 21 s
+  cost: 217,
+  cooldownTicks: Math.round(15.4 * TICK.RATE), // 21 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -313,8 +313,8 @@ export const TOXIC_GAS: AbilityDefinition = {
   id: "toxicGas",
   name: "Toxic Gas",
   kind: "ultimate",
-  cost: 700,
-  cooldownTicks: 74.75 * TICK.RATE, // 74.75 s
+  cost: 979,
+  cooldownTicks: Math.round(104.65 * TICK.RATE), // 74.75 s
   targeting: { mode: "allEnemies" },
   effects: [
     {

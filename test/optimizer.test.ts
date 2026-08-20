@@ -98,7 +98,11 @@ test("the optimizer never modifies production balance", () => {
   assert.equal(getActiveParameterSet(), null);
   assert.equal(param("castle.startingHp", 10_000), 10_000);
   assert.equal(param("economy.incomePerCitizen", 0.0275), 0.0275);
-  assert.equal(resolveAbility(FIREBALL, 0).effects[0]!.params.amount, 250);
+  // Read from the catalog rather than hardcoded: this test is about the
+  // optimizer not MUTATING production, and pinning a literal made it fail
+  // whenever the balance legitimately changed (v3 moved Fireball 250 -> 441).
+  const fireballBase = baselineCatalog.find((x) => x.id === "ability.fireball.effects.0.amount")!.base;
+  assert.equal(resolveAbility(FIREBALL, 0).effects[0]!.params.amount, fireballBase);
   // The catalog's production bases are untouched.
   assert.deepEqual(listParameters(), baselineCatalog);
 });

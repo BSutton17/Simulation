@@ -50,11 +50,11 @@ export const ACE_OF_SPADES: AbilityDefinition = {
   id: "aceOfSpades",
   name: "Ace of Spades",
   kind: "attack",
-  cost: 135,
-  cooldownTicks: 3.5 * TICK.RATE, // 3.5 s
+  cost: 81,
+  cooldownTicks: Math.round(2.15 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 170, element: "joker" } },
+    { type: "damage", target: "target", params: { amount: 159, element: "joker" } },
     {
       type: "status",
       target: "self",
@@ -147,8 +147,8 @@ export const BLACKJACK: AbilityDefinition = {
   id: "blackjack",
   name: "Blackjack",
   kind: "attack",
-  cost: 275,
-  cooldownTicks: 11 * TICK.RATE, // 11 s
+  cost: 385,
+  cooldownTicks: Math.round(6.6 * TICK.RATE), // 11 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -230,15 +230,15 @@ export const LUCKY_DRAW: AbilityDefinition = {
   id: "luckyDraw",
   name: "Lucky Draw",
   kind: "utility",
-  cost: 220,
-  cooldownTicks: 36.5 * TICK.RATE, // 36.5 s
+  cost: 308,
+  cooldownTicks: Math.round(51.05 * TICK.RATE), // 36.5 s
   targeting: { mode: "self" },
   effects: [
     {
       type: "luckyDraw",
       target: "self",
       params: {
-        durationTicks: LUCKY_DRAW_DURATION,
+        durationTicks: Math.round(25.85 * TICK.RATE),
         luckyDraw: {
           chance: LUCKY_DRAW_CHANCE,
           outcomes: [
@@ -303,8 +303,8 @@ export const ROULETTE: AbilityDefinition = {
   id: "roulette",
   name: "Roulette",
   kind: "attack",
-  cost: 425,
-  cooldownTicks: 30 * TICK.RATE, // 30 s
+  cost: 255,
+  cooldownTicks: Math.round(22.3 * TICK.RATE), // 30 s
   targeting: { mode: "singleEnemy" },
   effects: [{ type: "roulette", target: "target", params: {} }],
   upgradePath: [
@@ -332,8 +332,8 @@ export const SLOT_MACHINE: AbilityDefinition = {
   id: "slotMachine",
   name: "Slot Machine",
   kind: "ultimate",
-  cost: 820,
-  cooldownTicks: 93 * TICK.RATE, // 93 s
+  cost: 903,
+  cooldownTicks: Math.round(55.8 * TICK.RATE), // 93 s
   targeting: { mode: "allEnemies" },
   effects: [{ type: "slotMachine", target: "target", params: {} }],
   upgradePath: [

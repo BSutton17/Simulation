@@ -1,4 +1,6 @@
 import type { ParameterSet } from "../../../src/engine/parameters.js";
+import { KINGDOM_IDS } from "../../../src/data/kingdoms.js";
+import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
 import type { KingdomId } from "../../../src/data/kingdoms.js";
 import {
   ACTIVE_POPULATION,
@@ -157,6 +159,31 @@ export interface EvaluationResult {
   duel: DuelResults | null;
   ffa4: FfaResults | null;
   ffa7: FfaResults | null;
+  /** What players actually did — see `UsageSummary`. */
+  usage: UsageSummary;
+}
+
+/**
+ * Behaviour across the whole reading.
+ *
+ * Balance parity says nothing about whether the game is being PLAYED. A
+ * candidate can equalise win rates while sixteen abilities go uncast and no
+ * shield is ever bought, and the v1 fitness would score that a success — worse,
+ * it rewarded pushing unused abilities further out of reach, since an ability
+ * nobody casts cannot unbalance anything.
+ */
+export interface UsageSummary {
+  /** abilityId -> total casts across every match in the reading. */
+  abilities: Record<string, number>;
+  /** How many of the game's castable abilities were cast at least once. */
+  abilitiesUsed: number;
+  /** How many exist to be cast. */
+  abilitiesTotal: number;
+  /** Purchases by kind, summed over every match. */
+  purchases: Record<string, number>;
+  /** Shield purchases per match — the headline number for the shield problem. */
+  shieldsPerMatch: number;
+  matches: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,13 +255,35 @@ export async function evaluate(
   let ticks = 0;
   let timeouts = 0;
   let counted = 0;
+  const abilityCasts: Record<string, number> = {};
+  const purchaseCounts: Record<string, number> = {};
   for (const job of jobs) {
     const o = outcome(job);
     if (!o) continue;
     ticks += o.endedAtTick;
     if (o.timedOut) timeouts += 1;
     counted += 1;
+    for (const [id, n] of Object.entries(o.usage?.abilities ?? {})) {
+      abilityCasts[id] = (abilityCasts[id] ?? 0) + n;
+    }
+    for (const [kind, n] of Object.entries(o.usage?.purchases ?? {})) {
+      purchaseCounts[kind] = (purchaseCounts[kind] ?? 0) + n;
+    }
   }
+
+  // Every castable ability in the game — the denominator for "how much of the
+  // game is reachable". Passives are excluded: they are never cast.
+  const castable = KINGDOM_IDS.flatMap((k) =>
+    abilitiesForKingdom(k).filter((a) => a.kind !== "passive").map((a) => a.id),
+  );
+  const usage: UsageSummary = {
+    abilities: abilityCasts,
+    abilitiesUsed: castable.filter((id) => (abilityCasts[id] ?? 0) > 0).length,
+    abilitiesTotal: castable.length,
+    purchases: purchaseCounts,
+    shieldsPerMatch: counted > 0 ? (purchaseCounts.shield ?? 0) / counted : 0,
+    matches: counted,
+  };
 
   return {
     provenance,
@@ -252,6 +301,7 @@ export async function evaluate(
     ffa7: c.ffa7.enabled
       ? aggregateFfa("ffa7", 7, jobs, execution.outcomes, c, config)
       : null,
+    usage,
   };
 }
 

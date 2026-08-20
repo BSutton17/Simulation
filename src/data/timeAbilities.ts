@@ -25,14 +25,14 @@ export const TIK_TOK: AbilityDefinition = {
   id: "tikTok",
   name: "Tik Tok",
   kind: "attack",
-  cost: 140,
-  cooldownTicks: 3.5 * TICK.RATE, // 3.5 s
+  cost: 84,
+  cooldownTicks: Math.round(4.35 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 170, element: "time" },
+      params: { amount: 238, element: "time" },
     },
   ],
   upgradePath: [
@@ -81,14 +81,14 @@ export const HALF_PASSED_12: AbilityDefinition = {
   id: "halfPassed12",
   name: "Half Passed 12",
   kind: "attack",
-  cost: 235,
-  cooldownTicks: 27.5 * TICK.RATE, // 27.5 s
+  cost: 141,
+  cooldownTicks: Math.round(16.5 * TICK.RATE), // 27.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 450, element: "time" },
+      params: { amount: 461, element: "time" },
     },
     // TODO(time): the "scramble the UI" effect. The status is applied so the
     // mechanic hook exists; the client scramble visual is a later pass.
@@ -146,14 +146,14 @@ export const FATHER_TIME: AbilityDefinition = {
   id: "fatherTime",
   name: "Father Time",
   kind: "attack",
-  cost: 425,
-  cooldownTicks: 22.25 * TICK.RATE, // 22.25 s
+  cost: 593,
+  cooldownTicks: Math.round(13.35 * TICK.RATE), // 22.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 465, element: "time" },
+      params: { amount: 570, element: "time" },
     },
     {
       type: "status",
@@ -189,8 +189,8 @@ export const BLIP: AbilityDefinition = {
   id: "blip",
   name: "Blip!",
   kind: "utility",
-  cost: 175,
-  cooldownTicks: 9 * TICK.RATE, // 9 s
+  cost: 105,
+  cooldownTicks: Math.round(5.4 * TICK.RATE), // 9 s
   targeting: { mode: "self" },
   effects: [
     { type: "undoLastAttack", target: "self", params: {} },

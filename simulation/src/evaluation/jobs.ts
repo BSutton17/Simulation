@@ -1,5 +1,7 @@
 import { KINGDOM_IDS, type KingdomId } from "../../../src/data/kingdoms.js";
 import { runHeadlessMatch } from "../headless.js";
+import type { SimulationObserver } from "../types.js";
+import type { GameplayEvent } from "../../../src/engine/events.js";
 import {
   ACTIVE_POPULATION,
   factoryFor,
@@ -65,6 +67,27 @@ export interface MatchOutcome {
   timedOut: boolean;
   /** Finishing position per seat index (1 = winner). */
   placements: number[];
+  /**
+   * What the players actually DID, not just how it ended.
+   *
+   * Balance v3 scored a fairer game in which sixteen abilities were never cast
+   * once and bots never bought a shield. Nothing in the fitness measured either,
+   * so nothing stopped the search pushing an unused ability further out of
+   * reach — an ability nobody casts cannot unbalance anything, which makes
+   * worsening it a free way to satisfy a parity objective.
+   *
+   * Only non-zero entries are stored: this rides the distributed queue for
+   * every match in a million-match search, so a dense record per ability would
+   * be mostly zeroes at real cost.
+   */
+  usage: MatchUsage;
+}
+
+export interface MatchUsage {
+  /** abilityId -> times cast, summed over every seat. */
+  abilities: Record<string, number>;
+  /** Purchases by kind ("shield", "citizen", "repair"). */
+  purchases: Record<string, number>;
 }
 
 export interface PlanOptions {
@@ -247,10 +270,34 @@ export function planJobs(options: PlanOptions): MatchJob[] {
  * Shared verbatim by the serial path and by workers, so there is exactly one
  * definition of what a job means.
  */
+/**
+ * Counts what was cast and bought, so the fitness can see behaviour and not
+ * only outcomes. Deliberately tiny — this runs inside every evaluation match.
+ */
+class UsageObserver implements SimulationObserver {
+  private readonly abilities: Record<string, number> = {};
+  private readonly purchases: Record<string, number> = {};
+
+  onEvent(event: GameplayEvent): void {
+    if (event.type === "abilityCast") {
+      const id = (event as { abilityId: string }).abilityId;
+      this.abilities[id] = (this.abilities[id] ?? 0) + 1;
+    } else if (event.type === "purchase") {
+      const kind = (event as { kind: string }).kind;
+      this.purchases[kind] = (this.purchases[kind] ?? 0) + 1;
+    }
+  }
+
+  snapshot(): MatchUsage {
+    return { abilities: { ...this.abilities }, purchases: { ...this.purchases } };
+  }
+}
+
 export function runJob(
   job: MatchJob,
   population: StrategyPopulation = ACTIVE_POPULATION,
 ): MatchOutcome {
+  const usage = new UsageObserver();
   const record = runHeadlessMatch({
     players: job.kingdoms.map((kingdomId, i) => ({
       kingdomId,
@@ -259,6 +306,7 @@ export function runJob(
     seed: job.seed,
     maxTicks: job.maxTicks,
     createAI: factoryFor(population, job.profiles[0]!),
+    observers: [usage],
     telemetry: false,
   });
 
@@ -289,5 +337,6 @@ export function runJob(
     endedAtTick: record.endedAtTick,
     timedOut: record.timedOut,
     placements,
+    usage: usage.snapshot(),
   };
 }

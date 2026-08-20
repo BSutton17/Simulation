@@ -22,14 +22,14 @@ export const ZAP: AbilityDefinition = {
   id: "zap",
   name: "Zap",
   kind: "attack",
-  cost: 85,
-  cooldownTicks: 3.5 * TICK.RATE, // 3.5 s
+  cost: 53,
+  cooldownTicks: Math.round(3 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 255, element: "electricity" },
+      params: { amount: 225, element: "electricity" },
     },
   ],
   upgradePath: [
@@ -72,7 +72,7 @@ export const LIGHTNING_BARRAGE: AbilityDefinition = {
   id: "lightningBarrage",
   name: "Lightning Barrage",
   kind: "attack",
-  cost: 70, // per charge — the pipeline recomputes from charges spent
+  cost: 83, // per charge — the pipeline recomputes from charges spent
   unlockCost: 100,
   cooldownTicks: 0, // paced by charge regeneration, not an ability cooldown
   targeting: { mode: "singleEnemy" },
@@ -169,14 +169,14 @@ export const THUNDERDOME: AbilityDefinition = {
   id: "thunderdome",
   name: "Thunderdome",
   kind: "attack",
-  cost: 355,
-  cooldownTicks: 21 * TICK.RATE, // 21 s
+  cost: 418,
+  cooldownTicks: Math.round(12.8 * TICK.RATE), // 21 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 410, element: "electricity" },
+      params: { amount: 289, element: "electricity" },
     },
     {
       type: "status",
@@ -223,8 +223,8 @@ export const HACK: AbilityDefinition = {
   id: "hack",
   name: "Hack",
   kind: "utility",
-  cost: 475,
-  cooldownTicks: 61.5 * TICK.RATE, // 61.5 s
+  cost: 332,
+  cooldownTicks: Math.round(52.85 * TICK.RATE), // 61.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -281,8 +281,8 @@ export const THUNDERING_FATE: AbilityDefinition = {
   id: "thunderingFate",
   name: "Thundering Fate",
   kind: "ultimate",
-  cost: 880,
-  cooldownTicks: 252 * TICK.RATE, // 252 s
+  cost: 1052,
+  cooldownTicks: Math.round(151.2 * TICK.RATE), // 252 s
   targeting: { mode: "self" },
   effects: [
     {

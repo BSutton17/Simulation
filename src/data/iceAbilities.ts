@@ -97,8 +97,8 @@ export const ICICLE: AbilityDefinition = {
   id: "icicle",
   name: "Icicle",
   kind: "attack",
-  cost: 95,
-  cooldownTicks: 3.5 * TICK.RATE, // 3.5 s
+  cost: 77,
+  cooldownTicks: Math.round(3.3 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -108,7 +108,7 @@ export const ICICLE: AbilityDefinition = {
       // (a shattering blow on a frozen castle). Generic bonus-vs-status, same
       // primitive as Fire's bonus to burning targets.
       params: {
-        amount: 280,
+        amount: 168,
         element: "ice",
         bonusDamageIfTargetHasStatus: { statusId: "frozen", extraAmount: 350 },
       },
@@ -146,15 +146,15 @@ export const FLOOD_OF_FROST: AbilityDefinition = {
   id: "floodOfFrost",
   name: "Flood of Frost",
   kind: "attack",
-  cost: 250,
-  cooldownTicks: 9.25 * TICK.RATE, // 9.25 s
+  cost: 150,
+  cooldownTicks: Math.round(6.55 * TICK.RATE), // 9.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
       params: {
-        amount: 585,
+        amount: 351,
         element: "ice",
         bonusDamageIfTargetHasStatus: { statusId: "frozen", extraAmount: 300 },
       },
@@ -204,8 +204,8 @@ export const FREEZE_TO_THE_CORE: AbilityDefinition = {
   id: "freezeToTheCore",
   name: "Freeze to the Core",
   kind: "attack",
-  cost: 485,
-  cooldownTicks: 15 * TICK.RATE, // 15 s
+  cost: 472,
+  cooldownTicks: Math.round(21 * TICK.RATE), // 15 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -214,7 +214,7 @@ export const FREEZE_TO_THE_CORE: AbilityDefinition = {
       // Freeze to the Core applies Frozen itself (below), so this bonus only
       // triggers when the target is ALREADY frozen (a re-freeze / follow-up).
       params: {
-        amount: 610,
+        amount: 366,
         element: "ice",
         bonusDamageIfTargetHasStatus: { statusId: "frozen", extraAmount: 550 },
       },
@@ -265,14 +265,14 @@ export const SNOWMAN: AbilityDefinition = {
   id: "snowman",
   name: "Snowman",
   kind: "utility",
-  cost: 225,
-  cooldownTicks: 55.25 * TICK.RATE, // 55.25 s
+  cost: 285,
+  cooldownTicks: Math.round(51.7 * TICK.RATE), // 55.25 s
   targeting: { mode: "self" },
   effects: [
     {
       type: "status",
       target: "self",
-      params: { status: SNOWMAN_STATUS, durationTicks: 185}, // 10 s
+      params: { status: SNOWMAN_STATUS, durationTicks: Math.round(12.95 * TICK.RATE)}, // 10 s
     },
   ],
   upgradePath: [
@@ -300,8 +300,8 @@ export const BLIZZARD: AbilityDefinition = {
   id: "blizzard",
   name: "Blizzard",
   kind: "ultimate",
-  cost: 500,
-  cooldownTicks: 90.25 * TICK.RATE, // 90.25 s
+  cost: 300,
+  cooldownTicks: Math.round(94.65 * TICK.RATE), // 90.25 s
   targeting: { mode: "allEnemies" },
   effects: [
     {

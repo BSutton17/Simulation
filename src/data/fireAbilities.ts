@@ -78,8 +78,8 @@ export const FIREBALL: AbilityDefinition = {
   id: "fireball",
   name: "Fireball",
   kind: "attack",
-  cost: 125,
-  cooldownTicks: 2.75 * TICK.RATE, // 2.75 s
+  cost: 123,
+  cooldownTicks: Math.round(2.15 * TICK.RATE), // 2.75 s
   targeting: { mode: "singleEnemy" },
   // A plain damage attack — Burn is applied only by Scorching Sun (guaranteed)
   // and Firenado (chance); the Burn status itself carries the extra damage.
@@ -87,7 +87,7 @@ export const FIREBALL: AbilityDefinition = {
     {
       type: "damage",
       target: "target",
-      params: { amount: 315, element: "fire" },
+      params: { amount: 441, element: "fire" },
     },
   ],
   upgradePath: [
@@ -121,15 +121,15 @@ export const SCORCHING_SUN: AbilityDefinition = {
   id: "scorchingSun",
   name: "Scorching Sun",
   kind: "attack",
-  cost: 150,
-  cooldownTicks: 8.75 * TICK.RATE, // 8.75 s
+  cost: 171,
+  cooldownTicks: Math.round(12.2 * TICK.RATE), // 8.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
       params: {
-        amount: 445,
+        amount: 623,
         element: "fire",
         bonusDamageIfTargetHasStatus: { statusId: "burn", extraAmount: 100 },
       },
@@ -186,8 +186,8 @@ export const FIRENADO: AbilityDefinition = {
   id: "firenado",
   name: "Firenado",
   kind: "attack",
-  cost: 345,
-  cooldownTicks: 23 * TICK.RATE, // 23 s
+  cost: 208,
+  cooldownTicks: Math.round(13.8 * TICK.RATE), // 23 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -198,7 +198,7 @@ export const FIRENADO: AbilityDefinition = {
       // is worth most BEFORE the fire has actually caught. Keying it off Burn
       // instead would just reward hitting the same burn twice.
       params: {
-        amount: 505,
+        amount: 425,
         element: "fire",
         bonusDamageIfTargetHasStatus: { statusId: "ignited", extraAmount: 250 },
       },
@@ -310,14 +310,14 @@ export const HEAT_WAVE: AbilityDefinition = {
   id: "heatWave",
   name: "Heat Wave",
   kind: "utility",
-  cost: 95,
-  cooldownTicks: 15.75 * TICK.RATE, // 15.75 s
+  cost: 133,
+  cooldownTicks: Math.round(9.45 * TICK.RATE), // 15.75 s
   targeting: { mode: "self" },
   effects: [
     {
       type: "status",
       target: "self",
-      params: { status: HEAT_WAVE_STATUS, durationTicks: 190},
+      params: { status: HEAT_WAVE_STATUS, durationTicks: Math.round(8.85 * TICK.RATE)},
     },
   ],
   upgradePath: [

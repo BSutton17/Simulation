@@ -11,8 +11,9 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  *
  * v1 searched 20 passive and system dials and no ability parameters at all.
  * v2 searches abilities only: damage, cooldown and cost for attacks; duration,
- * cost and cooldown for utilities; cooldown and cost for ultimates. 181
- * dimensions. v1's twenty passive and system dials are held still, so anything
+ * cost and cooldown for utilities; cooldown and cost for ultimates. 180
+ * dimensions — 181 until balance v4 dropped Poison Apple's permanent-duration
+ * sentinel, a dial whose every value means the same thing. v1's twenty passive and system dials are held still, so anything
  * the search finds is attributable to the abilities.
  */
 
@@ -54,10 +55,12 @@ test("each ability kind contributes exactly the dials it was asked for", () => {
   const dials = searchable(v2).filter((x) => x.id.startsWith("ability."));
   const by = (c: string) => dials.filter((x) => x.category === c);
   assert.equal(by("abilityAttack").length, 126, "attack: damage, cooldown, cost");
-  assert.equal(by("abilityUtility").length, 31, "utility: duration, cost, cooldown");
+  // 30, not 31: Poison Apple is a utility, and its permanent-duration sentinel
+  // was the dial balance v4 removed.
+  assert.equal(by("abilityUtility").length, 30, "utility: duration, cost, cooldown");
   assert.equal(by("abilityUltimate").length, 24, "ultimate: cooldown, cost");
-  assert.equal(dials.length, 181);
-  assert.equal(searchable(v2).length, 181, "v2 is ability dials only");
+  assert.equal(dials.length, 180);
+  assert.equal(searchable(v2).length, 180, "v2 is ability dials only");
 
   // Ultimates are priced and paced but their payload is left alone.
   for (const dial of by("abilityUltimate")) {
@@ -146,6 +149,6 @@ test("the dimension count is pinned, because compute scales with it", () => {
   // roughly 10 evaluations per dimension needs ~104 generations, about 198
   // hours. That is a deliberate cost, not an oversight.
   const dims = searchable(v2).length;
-  assert.equal(dims, 181, "the expanded schema changed size");
+  assert.equal(dims, 180, "the expanded schema changed size");
   assert.equal(4 + Math.floor(3 * Math.log(dims)), 19, "population no longer scales as expected");
 });

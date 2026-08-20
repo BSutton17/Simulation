@@ -1,3 +1,4 @@
+import type { UsageSummary } from "../evaluation/evaluator.js";
 import { KINGDOM_IDS, type KingdomId } from "../../../src/data/kingdoms.js";
 import type {
   DuelResults,
@@ -20,6 +21,8 @@ import { EVALUATION_FORMAT_VERSION } from "../evaluation/provenance.js";
 
 export interface SyntheticSpec {
   id: string;
+  /** Override the behaviour block — for tests about the usage terms. */
+  usage?: UsageSummary;
   /**
    * Imbalance strength in [0, 1]. 0 is a perfectly fair game; 1 is maximal
    * spread, with kingdoms fanned out evenly from dominant to hopeless.
@@ -169,5 +172,16 @@ export function syntheticEvaluation(spec: SyntheticSpec): EvaluationResult {
     duel,
     ffa4,
     ffa7,
+    usage: spec.usage ?? {
+      // A synthetic reading defaults to a HEALTHY game: everything cast, shields
+      // bought. Tests that care about the usage terms say so explicitly, and
+      // tests that do not are not accidentally penalised by them.
+      abilities: {},
+      abilitiesUsed: 80,
+      abilitiesTotal: 80,
+      purchases: { shield: matches * 2 },
+      shieldsPerMatch: 2,
+      matches,
+    },
   };
 }

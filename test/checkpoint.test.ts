@@ -122,9 +122,13 @@ test("resume is refused across every identity field that could change a score", 
     ["engineSha", "other999"],
     ["engineDirty", true],
     ["catalogHash", "11112222"],
-    ["fitnessVersion", "v2"],
-    ["schemaVersion", "v2"],
-    ["optimizerVersion", "v2"],
+    // Sentinel values rather than "v2": the real versions move, and pinning a
+    // plausible next value made this a no-op the moment FITNESS_VERSION became
+    // v2 — the mutation matched the identity and nothing was refused, which
+    // looked exactly like a broken guard.
+    ["fitnessVersion", "changed-fitness"],
+    ["schemaVersion", "changed-schema"],
+    ["optimizerVersion", "changed-optimizer"],
     ["weightsName", "equal"],
     ["seed", 43],
     ["populationSize", 12],

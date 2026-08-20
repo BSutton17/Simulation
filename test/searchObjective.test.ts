@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { DEFAULT_USAGE_TARGETS } from "../simulation/src/fitness/index.js";
 import { KINGDOM_IDS } from "../src/data/kingdoms.js";
 import { KINGDOM_ABILITIES } from "../src/data/kingdomAbilities.js";
 import {
@@ -40,9 +41,15 @@ const score = (s: SyntheticSpec) =>
 
 test("the search objective is the penalised score without the cap", () => {
   const f = score(spec("base", 0.5, 0.5, 0.5));
+  // Balance v4 reserves a share of the scale for usage, so the objective is
+  // (1 - w) x penalised balance + w x usage rather than the raw difference.
+  // The property under test is unchanged: no CAP is applied, so the signal
+  // stays continuous for a search.
+  const w = DEFAULT_USAGE_TARGETS.weight;
+  const expected = (1 - w) * (f.weightedScore - f.penalty) + w * f.usage.score;
   assert.ok(
-    Math.abs(f.searchObjective - (f.weightedScore - f.penalty)) < 1e-9,
-    "searchObjective must be weightedScore minus penalty",
+    Math.abs(f.searchObjective - expected) < 1e-9,
+    `searchObjective ${f.searchObjective} != ${expected}`,
   );
   // The penalty is still fully applied — this is not a weaker definition of
   // balance, only a continuous one.
@@ -243,14 +250,30 @@ test("a thin sample cannot support a regression claim", () => {
   assert.ok(compareCoverage(checkpoint(66), checkpoint(52)).regression);
 });
 
-test("coverage never reaches the fitness score", () => {
-  // Rewarding coverage directly would let the optimizer buy a better score by
-  // making abilities cheap enough to spam, trading balance for a diagnostic.
+test("coverage reaches the fitness score, and cannot be bought with balance", () => {
+  // ⚠️ THIS TEST USED TO ASSERT THE OPPOSITE, and the reasoning was sound at the
+  // time: "rewarding coverage directly would let the optimizer buy a better
+  // score by making abilities cheap enough to spam, trading balance for a
+  // diagnostic."
+  //
+  // Balance v3 then showed the cost of leaving it out. It produced a materially
+  // fairer game — duel std deviation down 36% — in which sixteen of eighty
+  // abilities were never cast once and bots never bought a shield, because an
+  // ability nobody casts cannot unbalance anything, so making a dead ability
+  // WORSE was a free way to score better. The search did exactly that.
+  //
+  // v4 admits coverage, and answers the original objection with two mechanisms
+  // rather than by dropping the concern:
+  //
+  //   1. Coverage counts DISTINCT abilities cast at least once, and saturates.
+  //      Making an ability cheap enough to spam moves it not at all — see
+  //      "spam cannot substitute for reach" in fitness.test.ts.
+  //   2. A balance FLOOR makes any regression below the incumbent a violation,
+  //      so fairness cannot be traded for it.
   const f = score(spec("x", 0.4, 0.4, 0.4));
-  const serialised = JSON.stringify(f);
-  for (const term of ["coverage", "abilityCoverage", "abilitiesUsed"]) {
-    assert.ok(!serialised.includes(term), `fitness leaked "${term}"`);
-  }
+  assert.ok(f.usage, "fitness must now report usage");
+  assert.ok(f.usage.coverage >= 0 && f.usage.coverage <= 1);
+  assert.equal(typeof f.usage.abilitiesUsed, "number");
 });
 
 test("the coverage report reads as a diagnostic", () => {

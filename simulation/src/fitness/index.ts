@@ -23,6 +23,10 @@ export {
   type DeadBands,
   type ComponentWeights,
   type Constraints,
+  DEFAULT_USAGE_TARGETS,
+  scoreUsage,
+  type UsageTargets,
+  type FitnessUsage,
 } from "./fitness.js";
 
 export {

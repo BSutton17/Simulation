@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import type { UsageSummary } from "../simulation/src/evaluation/evaluator.js";
 import {
   FITNESS_VERSION,
   WEIGHT_PRESETS,
@@ -281,4 +282,109 @@ test("format scores are independent of the other formats", () => {
   const b = score(spec("b", 0.9, 0.4, 0.4));
   assert.ok(Math.abs(formatScore(a, "ffa4") - formatScore(b, "ffa4")) < 1e-9);
   assert.ok(formatScore(a, "duel") > formatScore(b, "duel"));
+});
+
+// ---------------------------------------------------------------------------
+// Balance v4: usage terms
+//
+// The property that matters is not "usage raises the score" — it is that usage
+// can NEVER be bought with fairness. v3 scored a materially fairer game in
+// which sixteen abilities were never cast and no shield was ever purchased,
+// because parity was the only thing measured and a dead ability cannot
+// unbalance anything. These pin the shape that fixes it.
+// ---------------------------------------------------------------------------
+
+const healthyUsage = (over: Partial<UsageSummary> = {}): UsageSummary => ({
+  abilities: {}, abilitiesUsed: 80, abilitiesTotal: 80,
+  purchases: { shield: 200 }, shieldsPerMatch: 2, matches: 100, ...over,
+});
+
+test("v4: among equally balanced candidates, more usage wins", () => {
+  const spec = { id: "fair", duelImbalance: 0.1, ffa4Imbalance: 0.1, ffa7Imbalance: 0.1 };
+  const rich = scoreFitness(syntheticEvaluation({ ...spec, usage: healthyUsage() }));
+  const poor = scoreFitness(
+    syntheticEvaluation({ ...spec, usage: healthyUsage({ abilitiesUsed: 60, shieldsPerMatch: 0 }) }),
+  );
+  assert.ok(
+    rich.searchObjective > poor.searchObjective,
+    `usage did not break the tie: ${rich.searchObjective} vs ${poor.searchObjective}`,
+  );
+  // ...and the balance half is untouched by it.
+  assert.equal(rich.weightedScore, poor.weightedScore);
+});
+
+test("v4: perfect usage cannot rescue a balance regression", () => {
+  // The load-bearing test. A candidate that trades fairness for usage must lose
+  // to one that did not, however complete its ability coverage.
+  const floor = scoreFitness(
+    syntheticEvaluation({ id: "incumbent", duelImbalance: 0.1, ffa4Imbalance: 0.1, ffa7Imbalance: 0.1 }),
+  ).weightedScore;
+
+  const honest = scoreFitness(
+    syntheticEvaluation({
+      id: "honest", duelImbalance: 0.1, ffa4Imbalance: 0.1, ffa7Imbalance: 0.1,
+      usage: healthyUsage({ abilitiesUsed: 64, shieldsPerMatch: 1 }),
+    }),
+    { usage: { balanceFloor: floor } },
+  );
+  const cheat = scoreFitness(
+    syntheticEvaluation({
+      id: "cheat", duelImbalance: 0.5, ffa4Imbalance: 0.5, ffa7Imbalance: 0.5,
+      usage: healthyUsage(),
+    }),
+    { usage: { balanceFloor: floor } },
+  );
+
+  assert.ok(
+    cheat.violations.some((v) => v.kind === "balanceRegression"),
+    "trading balance away must register as a violation",
+  );
+  assert.ok(
+    honest.searchObjective > cheat.searchObjective,
+    `perfect usage rescued a worse game: ${cheat.searchObjective} vs ${honest.searchObjective}`,
+  );
+});
+
+test("v4: ability coverage saturates, so spam cannot substitute for reach", () => {
+  const spec = { id: "s", duelImbalance: 0.2, ffa4Imbalance: 0.2, ffa7Imbalance: 0.2 };
+  // A million casts spread over 60 abilities scores strictly worse than a
+  // handful spread over all 80. Reach is the thing, not volume.
+  const spam = scoreFitness(
+    syntheticEvaluation({ ...spec, usage: healthyUsage({ abilitiesUsed: 60, abilities: { fireball: 1e6 } }) }),
+  );
+  const reach = scoreFitness(
+    syntheticEvaluation({ ...spec, usage: healthyUsage({ abilitiesUsed: 80, abilities: { fireball: 10 } }) }),
+  );
+  assert.ok(reach.usage.coverage > spam.usage.coverage);
+  assert.ok(reach.searchObjective > spam.searchObjective);
+});
+
+test("v4: shields are measured, and zero purchases is scored as such", () => {
+  const spec = { id: "s", duelImbalance: 0.2, ffa4Imbalance: 0.2, ffa7Imbalance: 0.2 };
+  const none = scoreFitness(
+    syntheticEvaluation({ ...spec, usage: healthyUsage({ shieldsPerMatch: 0, purchases: {} }) }),
+  );
+  const some = scoreFitness(syntheticEvaluation({ ...spec, usage: healthyUsage() }));
+  assert.equal(none.usage.shields, 0, "no shields bought must score zero on that term");
+  assert.equal(some.usage.shields, 1, "hitting the target must score full marks");
+  assert.ok(some.searchObjective > none.searchObjective);
+});
+
+test("v4: the objective stays inside [0,1] and strictly tracks balance", () => {
+  // The first shape tried added usage ON TOP, so a fair game scored 1.15 and
+  // clamped to 1.0 — every good candidate flattened to the same number and the
+  // search lost resolution exactly where it operates.
+  let previous = Infinity;
+  for (const imbalance of [0, 0.2, 0.4, 0.6, 0.8]) {
+    const r = scoreFitness(
+      syntheticEvaluation({
+        id: `i${imbalance}`, duelImbalance: imbalance,
+        ffa4Imbalance: imbalance, ffa7Imbalance: imbalance,
+        usage: healthyUsage(),
+      }),
+    );
+    assert.ok(r.searchObjective >= 0 && r.searchObjective <= 1, "out of range");
+    assert.ok(r.searchObjective < previous, `not monotonic at ${imbalance}`);
+    previous = r.searchObjective;
+  }
 });

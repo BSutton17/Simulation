@@ -51,11 +51,11 @@ export const SHADOW_STRIKE: AbilityDefinition = {
   id: "shadowStrike",
   name: "Shadow Strike",
   kind: "attack",
-  cost: 60,
-  cooldownTicks: 3.75 * TICK.RATE, // 3.75 s
+  cost: 71,
+  cooldownTicks: Math.round(5.25 * TICK.RATE), // 3.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 340, element: "dark" } },
+    { type: "damage", target: "target", params: { amount: 476, element: "dark" } },
   ],
   upgradePath: [
     { level: 1, cost: 150, changes: { effectParams: [{ amount: 410 }] } },
@@ -274,8 +274,8 @@ export const INFINITUM_TENEBRAE: AbilityDefinition = {
   id: "infinitumTenebrae",
   name: "Infinitum Tenebrae",
   kind: "ultimate",
-  cost: 830,
-  cooldownTicks: 110.25 * TICK.RATE, // 110.25 s
+  cost: 498,
+  cooldownTicks: Math.round(154.35 * TICK.RATE), // 110.25 s
   targeting: { mode: "self" },
   effects: [
     {

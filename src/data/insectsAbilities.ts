@@ -105,11 +105,11 @@ export const VENOM_SHOT: AbilityDefinition = {
   id: "venomShot",
   name: "Venom Shot",
   kind: "attack",
-  cost: 120,
-  cooldownTicks: 2.5 * TICK.RATE, // 2.5 s
+  cost: 168,
+  cooldownTicks: Math.round(3.5 * TICK.RATE), // 2.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 340, element: "insects" } },
+    { type: "damage", target: "target", params: { amount: 224, element: "insects" } },
     {
       type: "status",
       target: "target",
@@ -145,11 +145,11 @@ export const BUTTERFLIES: AbilityDefinition = {
   id: "butterflies",
   name: "Butterflies",
   kind: "attack",
-  cost: 395,
-  cooldownTicks: 15 * TICK.RATE, // 15 s
+  cost: 494,
+  cooldownTicks: Math.round(17.35 * TICK.RATE), // 15 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 560, element: "insects" } },
+    { type: "damage", target: "target", params: { amount: 727, element: "insects" } },
     {
       type: "status",
       target: "target",
@@ -189,11 +189,11 @@ export const INFECTED: AbilityDefinition = {
   id: "infected",
   name: "Infected",
   kind: "attack",
-  cost: 425,
-  cooldownTicks: 17.5 * TICK.RATE, // 17.5 s
+  cost: 532,
+  cooldownTicks: Math.round(10.5 * TICK.RATE), // 17.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 600, element: "insects" } },
+    { type: "damage", target: "target", params: { amount: 612, element: "insects" } },
     {
       type: "status",
       target: "target",
@@ -279,8 +279,8 @@ export const CAPRICE: AbilityDefinition = {
   id: "caprice",
   name: "Caprice",
   kind: "ultimate",
-  cost: 780,
-  cooldownTicks: 163 * TICK.RATE, // 163 s
+  cost: 735,
+  cooldownTicks: Math.round(97.8 * TICK.RATE), // 163 s
   targeting: { mode: "self" },
   effects: [
     {

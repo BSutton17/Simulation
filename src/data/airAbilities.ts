@@ -82,8 +82,8 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
   id: "aLightBreeze",
   name: "A Light Breeze",
   kind: "attack",
-  cost: 105,
-  cooldownTicks: 3 * TICK.RATE, // 3 s
+  cost: 63,
+  cooldownTicks: Math.round(3.75 * TICK.RATE), // 3 s
   targeting: { mode: "singleEnemy" },
   // Bird's Eye View turns a multi-target Breeze into a bouncing gust: full
   // damage per landing, 50% to bounce again, up to 4 landings, never the same
@@ -93,7 +93,7 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
     {
       type: "damage",
       target: "target",
-      params: { amount: 170, element: "air" },
+      params: { amount: 238, element: "air" },
     },
   ],
   upgradePath: [
@@ -128,14 +128,14 @@ export const HURRICANE: AbilityDefinition = {
   id: "hurricane",
   name: "Hurricane",
   kind: "attack",
-  cost: 295,
-  cooldownTicks: 10.75 * TICK.RATE, // 10.75 s
+  cost: 177,
+  cooldownTicks: Math.round(13.2 * TICK.RATE), // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 445, element: "air" },
+      params: { amount: 623, element: "air" },
     },
     {
       type: "status",
@@ -184,15 +184,15 @@ export const THICK_FOG: AbilityDefinition = {
   id: "thickFog",
   name: "Thick Fog",
   kind: "attack",
-  cost: 290,
-  cooldownTicks: 14.5 * TICK.RATE, // 14.5 s
+  cost: 255,
+  cooldownTicks: Math.round(20.3 * TICK.RATE), // 14.5 s
   targeting: { mode: "singleEnemy" },
   maxConcurrentAffected: { statusId: "vision:fog", limit: 3 },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 485, element: "air" },
+      params: { amount: 679, element: "air" },
     },
     {
       type: "vision",
@@ -274,8 +274,8 @@ export const DUST_BUNNIES: AbilityDefinition = {
   id: "dustBunnies",
   name: "Dust Bunnies",
   kind: "ultimate",
-  cost: 500,
-  cooldownTicks: 93.25 * TICK.RATE, // 93.25 s
+  cost: 300,
+  cooldownTicks: Math.round(64.85 * TICK.RATE), // 93.25 s
   targeting: { mode: "allEnemies" },
   effects: [
     {

@@ -71,15 +71,15 @@ export const LIGHT_BEAM: AbilityDefinition = {
   id: "lightBeam",
   name: "Light Beam",
   kind: "attack",
-  cost: 75,
-  cooldownTicks: 2.75 * TICK.RATE, // 2.75 s
+  cost: 45,
+  cooldownTicks: Math.round(3.4 * TICK.RATE), // 2.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
       params: {
-        amount: 150,
+        amount: 142,
         element: "light",
         bonusDamageIfTargetHasStatus: {
           statusId: FIREFLIES_STATUS.id,
@@ -126,11 +126,11 @@ export const FIREFLIES: AbilityDefinition = {
   id: "fireflies",
   name: "Fireflies",
   kind: "attack",
-  cost: 240,
-  cooldownTicks: 16.5 * TICK.RATE, // 16.5 s
+  cost: 153,
+  cooldownTicks: Math.round(13.4 * TICK.RATE), // 16.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 285, element: "light" } },
+    { type: "damage", target: "target", params: { amount: 338, element: "light" } },
     {
       type: "status",
       target: "target",
@@ -173,15 +173,15 @@ export const ILLUMINATION: AbilityDefinition = {
   id: "illumination",
   name: "Illumination",
   kind: "attack",
-  cost: 460,
-  cooldownTicks: 20.5 * TICK.RATE, // 20.5 s
+  cost: 276,
+  cooldownTicks: Math.round(21.45 * TICK.RATE), // 20.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
       params: {
-        amount: 390,
+        amount: 545,
         element: "light",
         // Lit up: a swarmed castle takes considerably more, on top of having
         // its ransom inflated below.
@@ -314,8 +314,8 @@ export const LIGHT_SHOW: AbilityDefinition = {
   id: "lightShow",
   name: "Light Show",
   kind: "ultimate",
-  cost: 495,
-  cooldownTicks: 45.25 * TICK.RATE, // 45.25 s
+  cost: 577,
+  cooldownTicks: Math.round(45.4 * TICK.RATE), // 45.25 s
   targeting: { mode: "self" },
   effects: [
     {

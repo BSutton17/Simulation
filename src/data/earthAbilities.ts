@@ -18,14 +18,14 @@ export const ROCK_THROW: AbilityDefinition = {
   id: "rockThrow",
   name: "Rock Throw",
   kind: "attack",
-  cost: 95,
-  cooldownTicks: 1.75 * TICK.RATE, // 1.75 s
+  cost: 133,
+  cooldownTicks: Math.round(1.55 * TICK.RATE), // 1.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 280, element: "earth" },
+      params: { amount: 392, element: "earth" },
     },
   ],
   upgradePath: [
@@ -58,7 +58,7 @@ export const ROCK_THROW: AbilityDefinition = {
 const meteorHit = (): EffectDefinition => ({
   type: "damage",
   target: "target",
-  params: { amount: 150, element: "earth", shieldDamageMultiplier: 1.5 },
+  params: { amount: 210, element: "earth", shieldDamageMultiplier: 1.5 },
 });
 
 /** Per-hit param override applied to all 5 meteors at once. */
@@ -72,8 +72,8 @@ export const METEOR_SHOWER: AbilityDefinition = {
   id: "meteorShower",
   name: "Meteor Shower",
   kind: "attack",
-  cost: 270,
-  cooldownTicks: 10.75 * TICK.RATE, // 10.75 s
+  cost: 378,
+  cooldownTicks: Math.round(14.9 * TICK.RATE), // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [meteorHit(), meteorHit(), meteorHit(), meteorHit(), meteorHit()],
   upgradePath: [
@@ -116,14 +116,14 @@ export const EARTHQUAKE: AbilityDefinition = {
   id: "earthquake",
   name: "Earthquake",
   kind: "attack",
-  cost: 595,
-  cooldownTicks: 17.75 * TICK.RATE, // 17.75 s
+  cost: 699,
+  cooldownTicks: Math.round(18.15 * TICK.RATE), // 17.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
       type: "damage",
       target: "target",
-      params: { amount: 835, element: "earth" },
+      params: { amount: 563, element: "earth" },
     },
     {
       type: "damage",
@@ -197,14 +197,14 @@ export const NATURAL_TERRAIN: AbilityDefinition = {
   id: "naturalTerrain",
   name: "Natural Terrain",
   kind: "utility",
-  cost: 250,
-  cooldownTicks: 36.75 * TICK.RATE, // 36.75 s
+  cost: 350,
+  cooldownTicks: Math.round(39.1 * TICK.RATE), // 36.75 s
   targeting: { mode: "self" },
   effects: [
     {
       type: "status",
       target: "self",
-      params: { status: NATURAL_TERRAIN_STATUS, durationTicks: 140}, // 10 s
+      params: { status: NATURAL_TERRAIN_STATUS, durationTicks: Math.round(4.2 * TICK.RATE)}, // 10 s
     },
   ],
   upgradePath: [
@@ -231,8 +231,8 @@ export const BRICK_WALL: AbilityDefinition = {
   id: "brickWall",
   name: "Brick Wall",
   kind: "ultimate",
-  cost: 590,
-  cooldownTicks: 99.5 * TICK.RATE, // 99.5 s
+  cost: 545,
+  cooldownTicks: Math.round(139.3 * TICK.RATE), // 99.5 s
   targeting: { mode: "self" },
   effects: [
     { type: "shield", target: "self", params: { amount: 4000 } },

@@ -120,10 +120,12 @@ test("fitness weights are untouched by this change", () => {
   assert.deepEqual(WEIGHT_PRESETS.designerPriority, { ffa4: 0.5, ffa7: 0.35, duel: 0.15 });
 });
 
-test("the 181-dimension ability-only search space is untouched", () => {
+test("the ability-only search space is 180 dimensions", () => {
   const v2 = buildSchema({ scope: "expanded" });
   assert.equal(v2.version, "v2");
-  assert.equal(searchable(v2).length, 181);
+  // 180, not 181: balance v4 removed Poison Apple's permanent-duration
+  // sentinel, which was a dimension that could not change the game.
+  assert.equal(searchable(v2).length, 180);
   assert.ok(searchable(v2).every((p) => p.id.startsWith("ability.")), "abilities only");
   // The 20 curated passive/system dials must not have crept back in.
   for (const id of ["castle.repairCost", "shield.cost", "passive.nature.0.pct", "economy.incomePerCitizen"]) {
@@ -131,11 +133,21 @@ test("the 181-dimension ability-only search space is untouched", () => {
   }
 });
 
-test("poisonApple's permanent-duration sentinel is still a search dimension", () => {
-  // Reported, not fixed: changing it is a schema change, and this experiment
-  // exists to isolate the effect of the allocation change alone.
-  const dial = searchable(buildSchema({ scope: "expanded" }))
-    .find((p) => p.id === "ability.poisonApple.effects.0.durationTicks");
-  assert.ok(dial, "the sentinel dial is still present");
-  assert.equal(dial!.base, Number.MAX_SAFE_INTEGER);
+test("poisonApple's permanent-duration sentinel is no longer searched", () => {
+  // Was reported-not-fixed while the v2 allocation experiment needed a stable
+  // search space. Balance v4 fixes it: the base is MAX_SAFE_INTEGER, meaning
+  // "permanent", so every value in a +/-40% band around it is equally permanent
+  // and the search was spending a whole dimension on a number that cannot
+  // change the game. It surfaced as 7018891676581419 in one candidate and the
+  // literal string "default" in another.
+  const dials = searchable(buildSchema({ scope: "expanded" }));
+  assert.ok(
+    !dials.some((p) => p.id === "ability.poisonApple.effects.0.durationTicks"),
+    "the sentinel must not be a search dimension",
+  );
+  // Its real dials are still searched — only the sentinel is excluded.
+  assert.ok(dials.some((p) => p.id === "ability.poisonApple.cost"));
+  assert.ok(dials.some((p) => p.id === "ability.poisonApple.cooldownTicks"));
+  // And nothing else sentinel-valued crept in.
+  assert.equal(dials.filter((p) => p.base >= 2 ** 40).length, 0);
 });

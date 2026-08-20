@@ -23,7 +23,11 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * Fingerprint of a fixed workload — winners, end ticks and placements across
  * every match, in plan order.
  *
- * Re-recorded 2026-08-19 for the kingdom balance change (sixteen ability files
+ * Re-recorded 2026-08-20 for BALANCE V3 — the 180 searched parameters written
+ * into the ability data files. Every match outcome moves when the balance does,
+ * which is the legitimate case this note anticipates.
+ *
+ * Previously re-recorded 2026-08-19 for the kingdom balance change (sixteen ability files
  * re-exported from the game). A balance change moves every match outcome, which
  * is exactly the legitimate case this note anticipates — the previous value,
  * 3ec181861c97925d, was recorded 2026-08-14 against the AI optimisation work and
@@ -39,7 +43,7 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * — but it must never change as a side effect of an optimisation. Re-record it
  * in the same commit as the intended change, and say why in the message.
  */
-const WORKLOAD_FINGERPRINT = "ed30d3b1a144ff23";
+const WORKLOAD_FINGERPRINT = "7e10e5b580ef28cf";
 
 const SMALL = { duelPairings: 2, ffa4Compositions: 1, ffa7Compositions: 1 };
 

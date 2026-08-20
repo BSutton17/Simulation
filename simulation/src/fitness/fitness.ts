@@ -1,3 +1,4 @@
+import type { UsageSummary } from "../evaluation/evaluator.js";
 import type {
   DuelResults,
   EvaluationResult,
@@ -28,7 +29,7 @@ import {
 
 /** Bump when any scoring rule changes. Scores across versions are NOT
  *  comparable, and the comparison path refuses to mix them. */
-export const FITNESS_VERSION = "v1";
+export const FITNESS_VERSION = "v2";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -69,6 +70,8 @@ export const WEIGHT_PRESETS: Record<string, FormatWeights> = {
 };
 
 export interface FitnessConfig {
+  /** Balance v4 usage terms. Omit to use the defaults. */
+  usage?: Partial<UsageTargets>;
   weights?: FormatWeights;
   /** Name recorded in provenance when a preset is used. */
   weightsName?: string;
@@ -101,6 +104,63 @@ export interface ComponentWeights {
   ffaPlacement: number;
   ffaDistribution: number;
 }
+
+/**
+ * Balance v4: usage terms, and why they are shaped this way.
+ *
+ * v3 produced a materially fairer game — duel std deviation fell 36% — in which
+ * sixteen of eighty abilities were never cast once and bots never bought a
+ * shield. That was not an oversight in the search; it was the objective working
+ * as written. Parity is the only thing v1 measured, an ability nobody casts
+ * cannot unbalance anything, and so making a dead ability WORSE was a free way
+ * to score better. The search duly did it: `theEndOfTheWorld` +40% cost,
+ * `brickWall` +40% cooldown, `earthquake` -40% damage.
+ *
+ * ⚠️ THE SHAPE MATTERS MORE THAN THE WEIGHTS. Usage is deliberately NOT another
+ * term in the weighted average. Averaging lets a candidate buy usage with
+ * balance — 0.9 balance and 0.6 usage beats 0.8 and 0.9 — which is exactly the
+ * trade we must not permit. Instead:
+ *
+ *   - balance is scored first, unchanged, and is the primary objective;
+ *   - a BALANCE FLOOR makes any regression below the incumbent a violation,
+ *     using the same machinery as the existing catastrophes;
+ *   - usage is added on top, bounded small, so it can only decide BETWEEN
+ *     candidates that are already at least as balanced.
+ *
+ * The floor is what makes this "in addition to" rather than "instead of".
+ */
+export interface UsageTargets {
+  /** Fraction of castable abilities that must be cast at least once. */
+  abilityCoverage: number;
+  /** Shield purchases per match at which the shield term is fully paid. */
+  shieldsPerMatch: number;
+  /**
+   * A candidate scoring below this on BALANCE alone is a regression, however
+   * good its usage. Set to the incumbent's balance score to make v4 strictly
+   * additive; 0 disables the floor.
+   */
+  balanceFloor: number;
+  /**
+   * Ceiling on the usage bonus, as a share of the final objective.
+   *
+   * Small on purpose. Large enough to break ties and to pay for reaching a dead
+   * ability, far too small to buy a meaningful amount of imbalance.
+   */
+  weight: number;
+}
+
+export const DEFAULT_USAGE_TARGETS: UsageTargets = {
+  // 80/80. The point of v4 is that every ability is reachable, so the target is
+  // not a comfortable fraction.
+  abilityCoverage: 1,
+  // Bots currently buy zero. Two per match is "shields are part of play"
+  // without demanding they be spammed.
+  shieldsPerMatch: 2,
+  // Set by the caller from the incumbent's measured score. Off by default so an
+  // ad-hoc scoring call does not silently fail everything.
+  balanceFloor: 0,
+  weight: 0.15,
+};
 
 export interface Constraints {
   /** A format scoring below this is treated as catastrophic. */
@@ -208,7 +268,22 @@ export interface FitnessProvenance {
   totalMatches: number;
 }
 
+export interface FitnessUsage {
+  /** Fraction of the ability-coverage target met, in [0,1]. */
+  coverage: number;
+  /** Fraction of the shields-per-match target met, in [0,1]. */
+  shields: number;
+  /** Combined behaviour score, in [0,1]. */
+  score: number;
+  abilitiesUsed: number;
+  abilitiesTotal: number;
+  shieldsPerMatch: number;
+  /** What this actually added to the objective. */
+  bonus: number;
+}
+
 export interface FitnessResult {
+  usage: FitnessUsage;
   /**
    * The authoritative verdict, capped when a constraint is violated. This is
    * the number a human reads and the gate a candidate must pass to be promoted.
@@ -457,6 +532,29 @@ function collectDiagnostics(result: EvaluationResult): FitnessDiagnostics {
 }
 
 /** Scores an evaluation reading. */
+/**
+ * Scores behaviour: how much of the game is reachable, and are shields played.
+ *
+ * Both terms are SATURATING — full marks at the target, nothing beyond it — so
+ * neither can be farmed. Coverage is the fraction of castable abilities cast at
+ * least once, which is the number this exists to move; casting one ability a
+ * thousand times must not substitute for casting a second one once.
+ */
+export function scoreUsage(
+  usage: UsageSummary,
+  targets: UsageTargets,
+): { coverage: number; shields: number; score: number } {
+  const wanted = Math.max(1, Math.round(usage.abilitiesTotal * targets.abilityCoverage));
+  const coverage = Math.min(1, usage.abilitiesUsed / wanted);
+  const shields =
+    targets.shieldsPerMatch <= 0
+      ? 1
+      : Math.min(1, usage.shieldsPerMatch / targets.shieldsPerMatch);
+  // Coverage carries the weight: an unreachable ability is a piece of the game
+  // nobody can play, where a missing shield purchase is a habit.
+  return { coverage, shields, score: 0.7 * coverage + 0.3 * shields };
+}
+
 export function scoreFitness(
   result: EvaluationResult,
   config: FitnessConfig = {},
@@ -495,10 +593,44 @@ export function scoreFitness(
     totalWeight > 0 ? formats.reduce((a, f) => a + f.contribution, 0) / totalWeight : 0;
 
   const violations = findViolations(result, formats, limits);
+
+  // ── Balance v4 ───────────────────────────────────────────────────────────
+  // The balance score is computed FIRST and is never diluted. Usage is added on
+  // top, and a regression below the incumbent's balance is a violation like any
+  // other catastrophe — which is what stops usage being bought with fairness.
+  const targets = { ...DEFAULT_USAGE_TARGETS, ...config.usage };
+  const usage = scoreUsage(result.usage, targets);
+  if (targets.balanceFloor > 0 && weightedScore < targets.balanceFloor) {
+    violations.push({
+      format: "overall",
+      kind: "balanceRegression",
+      subject: "balance",
+      observed: weightedScore,
+      threshold: targets.balanceFloor,
+      detail:
+        `balance ${weightedScore.toFixed(4)} is below the floor ` +
+        `${targets.balanceFloor.toFixed(4)} — usage must not be bought with fairness`,
+    });
+  }
+
   const penalty = Math.min(0.5, violations.length * limits.penaltyPerViolation);
   // The continuous signal: penalised but never capped, so partial progress is
   // visible to a search. The cap is applied only to `overall` below.
-  const searchObjective = clamp01(weightedScore - penalty);
+  // Usage takes a RESERVED SHARE of the scale rather than riding on top.
+  //
+  // Adding a bonus was the obvious shape and it was wrong: a fair game scored
+  // 1.0 + 0.15, clamped back to 1.0, so every good candidate flattened to the
+  // same number and the search lost all resolution exactly where it operates.
+  // Reserving a share keeps the objective in [0,1] and strictly increasing in
+  // balance.
+  //
+  // Trading usage for balance is prevented by the FLOOR, not by the shape: below
+  // the incumbent's balance a violation fires, is penalised, and caps the score.
+  // Above it, letting usage decide is the entire point of v4.
+  const balancePart = (1 - targets.weight) * clamp01(weightedScore - penalty);
+  const usagePart = targets.weight * usage.score;
+  const usageBonus = usagePart;
+  const searchObjective = clamp01(balancePart + usagePart);
   let overall = searchObjective;
 
   // A hard ceiling on top of the penalty: catastrophic imbalance in one format
@@ -519,6 +651,13 @@ export function scoreFitness(
     capped,
     formats,
     violations,
+    usage: {
+      ...usage,
+      abilitiesUsed: result.usage.abilitiesUsed,
+      abilitiesTotal: result.usage.abilitiesTotal,
+      shieldsPerMatch: result.usage.shieldsPerMatch,
+      bonus: usageBonus,
+    },
     diagnostics: collectDiagnostics(result),
     provenance: {
       fitnessVersion: FITNESS_VERSION,

@@ -113,11 +113,11 @@ export const FOX_SWIPE: AbilityDefinition = {
   id: "foxSwipe",
   name: "Fox Swipe",
   kind: "attack",
-  cost: 110,
-  cooldownTicks: 3.25 * TICK.RATE, // 3.25 s
+  cost: 66,
+  cooldownTicks: Math.round(3.7 * TICK.RATE), // 3.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 240, element: "kitsune" } },
+    { type: "damage", target: "target", params: { amount: 333, element: "kitsune" } },
     // A flat top-up, on top of the damage share "Swift Tails" already credits.
     { type: "chargeMemory", target: "self", params: { memoryCharge: FOX_SWIPE_MEMORY } },
   ],
@@ -144,11 +144,11 @@ export const FOX_FIRE: AbilityDefinition = {
   id: "foxFire",
   name: "Fox Fire",
   kind: "attack",
-  cost: 305,
-  cooldownTicks: 13.25 * TICK.RATE, // 13.25 s
+  cost: 373,
+  cooldownTicks: Math.round(8.8 * TICK.RATE), // 13.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 215, element: "kitsune" } },
+    { type: "damage", target: "target", params: { amount: 197, element: "kitsune" } },
     {
       type: "status",
       target: "target",
@@ -180,8 +180,8 @@ export const OLD_FRIENDS: AbilityDefinition = {
   id: "oldFriends",
   name: "Old Friends",
   kind: "attack",
-  cost: 325,
-  cooldownTicks: 43.25 * TICK.RATE, // 43.25 s
+  cost: 282,
+  cooldownTicks: Math.round(31.25 * TICK.RATE), // 43.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -219,8 +219,8 @@ export const AZURE_GUIDANCE: AbilityDefinition = {
   id: "azureGuidance",
   name: "Azure Guidance",
   kind: "utility",
-  cost: 170,
-  cooldownTicks: 30.25 * TICK.RATE, // 30.25 s
+  cost: 164,
+  cooldownTicks: Math.round(40.95 * TICK.RATE), // 30.25 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -228,7 +228,7 @@ export const AZURE_GUIDANCE: AbilityDefinition = {
       target: "self",
       params: {
         status: AZURE_GUIDANCE_STATUS,
-        durationTicks: KITSUNE.AZURE_GUIDANCE_DURATION_SECONDS * TICK.RATE,
+        durationTicks: Math.round(9.35 * TICK.RATE),
       },
     },
   ],

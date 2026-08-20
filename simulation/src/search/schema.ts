@@ -275,6 +275,14 @@ const ABILITY_DIALS: Record<string, { suffix: string; type: ParameterType; label
  * a percentage bound around zero spans nothing. Electricity's lightningBarrage
  * is the live example, with damage 0 and cooldown 0.
  */
+/**
+ * Above this, a value is a flag rather than a quantity.
+ *
+ * Nothing in the game legitimately reaches 2^40; anything that does is standing
+ * in for "forever" or "unlimited" and must not be searched.
+ */
+const SENTINEL_FLOOR = 2 ** 40;
+
 function abilityDials(catalog: Map<string, number>): Omit<SchemaParameter, "base" | "min" | "max">[] {
   const out: Omit<SchemaParameter, "base" | "min" | "max">[] = [];
   for (const kingdomId of KINGDOM_IDS) {
@@ -284,6 +292,13 @@ function abilityDials(catalog: Map<string, number>): Omit<SchemaParameter, "base
         const id = `ability.${ability.id}.${dial.suffix}`;
         const base = catalog.get(id);
         if (base === undefined || base === 0) continue;
+        // A sentinel is not a dial. Poison Apple's effect duration is
+        // MAX_SAFE_INTEGER, meaning "permanent" — every value inside a +/-40%
+        // band around it is equally permanent, so the search spent a whole
+        // dimension moving a number that cannot change the game. It came out of
+        // one candidate as 7018891676581419 and out of another as the literal
+        // string "default", which is what made it visible.
+        if (base >= SENTINEL_FLOOR) continue;
         out.push(p(id, `ability${ability.kind[0]!.toUpperCase()}${ability.kind.slice(1)}`,
           `${kingdomId}: ${ability.id} ${dial.label}`, dial.type));
       }

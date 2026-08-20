@@ -53,11 +53,11 @@ export const LAVA_PUNCH: AbilityDefinition = {
   id: "lavaPunch",
   name: "Lava Punch",
   kind: "attack",
-  cost: 100,
-  cooldownTicks: 3.5 * TICK.RATE, // 3.5 s
+  cost: 140,
+  cooldownTicks: Math.round(4.9 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 250, element: "magma" } },
+    { type: "damage", target: "target", params: { amount: 150, element: "magma" } },
     {
       type: "status",
       target: "target",
@@ -85,11 +85,11 @@ export const ERUPTION: AbilityDefinition = {
   id: "eruption",
   name: "Eruption",
   kind: "attack",
-  cost: 230,
-  cooldownTicks: 10.75 * TICK.RATE, // 10.75 s
+  cost: 278,
+  cooldownTicks: Math.round(6.45 * TICK.RATE), // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
-    { type: "damage", target: "target", params: { amount: 310, element: "magma" } },
+    { type: "damage", target: "target", params: { amount: 217, element: "magma" } },
     {
       type: "status",
       target: "target",
@@ -151,8 +151,8 @@ export const FLOOR_IS_LAVA: AbilityDefinition = {
   id: "floorIsLava",
   name: "Floor is Lava",
   kind: "utility",
-  cost: 325,
-  cooldownTicks: 33.25 * TICK.RATE, // 33.25 s
+  cost: 195,
+  cooldownTicks: Math.round(46.5 * TICK.RATE), // 33.25 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -160,7 +160,7 @@ export const FLOOR_IS_LAVA: AbilityDefinition = {
       target: "self",
       params: {
         burnMultiplier: MAGMA.LAVA_FLOOR_BURN_MULTIPLIER,
-        durationTicks: MAGMA.LAVA_FLOOR_DURATION_SECONDS * TICK.RATE,
+        durationTicks: Math.round(21 * TICK.RATE),
       },
     },
     {
@@ -217,8 +217,8 @@ export const THE_END_OF_THE_WORLD: AbilityDefinition = {
   id: "theEndOfTheWorld",
   name: "The End of the World",
   kind: "ultimate",
-  cost: 1095,
-  cooldownTicks: 92.75 * TICK.RATE, // 92.75 s
+  cost: 1255,
+  cooldownTicks: Math.round(55.65 * TICK.RATE), // 92.75 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -255,8 +255,8 @@ export const SMOKE_SCREEN: AbilityDefinition = {
   id: "smokeScreen",
   name: "Smoke Screen",
   kind: "utility",
-  cost: 180,
-  cooldownTicks: 26 * TICK.RATE, // 26 s
+  cost: 108,
+  cooldownTicks: Math.round(25.1 * TICK.RATE), // 26 s
   targeting: { mode: "self" },
   effects: [
     {
@@ -265,7 +265,7 @@ export const SMOKE_SCREEN: AbilityDefinition = {
       params: {
         targeterDamage: MAGMA.SMOKE_SCREEN_DAMAGE,
         status: SMOKE_SCREEN_STATUS,
-        durationTicks: MAGMA.SMOKE_SCREEN_BLIND_SECONDS * TICK.RATE,
+        durationTicks: Math.round(5.45 * TICK.RATE),
         vision: { type: "fog", durationTicks: MAGMA.SMOKE_SCREEN_BLIND_SECONDS * TICK.RATE },
       },
     },

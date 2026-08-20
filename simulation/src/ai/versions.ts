@@ -25,7 +25,7 @@ export const MODEL_FORMAT_VERSION = 1;
  * Bump when any of those change. A test pins this against the observation
  * specification hash so the two cannot drift apart silently.
  */
-export const OBSERVATION_VERSION = "v1";
+export const OBSERVATION_VERSION = "v2";
 
 /**
  * The action contract: the 22 outputs, their order, and the target ordering

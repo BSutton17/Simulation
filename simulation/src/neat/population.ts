@@ -1,5 +1,5 @@
 import { configHash, type NeatConfig } from "./config.js";
-import { createGenome, type Genome, type GenomeShape, firstHiddenId } from "./genome.js";
+import { createGenome, type Genome, type GenomeShape, firstHiddenId, cloneGenome } from "./genome.js";
 import { InnovationRegistry } from "./innovation.js";
 import { connectInitial, initialTopology, mutate } from "./mutation.js";
 import { NeatRng } from "./rng.js";
@@ -54,10 +54,23 @@ export class Population {
   /** Adjusted each generation when `compatibilityAdjust` is on. */
   private threshold: number;
 
-  constructor(shape: GenomeShape, config: NeatConfig, seed: number) {
+  /**
+   * @param seedGenomes Start from these instead of drawing a fresh topology —
+   *   a WARM START. The registry is advanced past everything they already use,
+   *   so a later structural mutation cannot reuse one of their innovation
+   *   numbers; crossover aligns genes by those numbers, and a collision would
+   *   quietly treat two unrelated connections as the same gene.
+   */
+  constructor(
+    shape: GenomeShape,
+    config: NeatConfig,
+    seed: number,
+    seedGenomes?: readonly Genome[],
+  ) {
     this.shape = shape;
     this.config = config;
     this.rng = new NeatRng(seed);
+    this.warmSeeds = seedGenomes;
     this.registry = new InnovationRegistry(firstHiddenId(shape));
     this.threshold = config.compatibilityThreshold;
     this.seedPopulation();
@@ -76,7 +89,33 @@ export class Population {
    * there is nothing for selection to prefer and the first few generations are
    * wasted rediscovering variety.
    */
+  private readonly warmSeeds?: readonly Genome[];
+
   private seedPopulation(): void {
+    if (this.warmSeeds && this.warmSeeds.length > 0) {
+      const maxNode = Math.max(...this.warmSeeds.flatMap((g) => g.nodes.map((n) => n.id)));
+      const maxInnovation = Math.max(
+        0,
+        ...this.warmSeeds.flatMap((g) => g.connections.map((c) => c.innovation)),
+      );
+      this.registry = new InnovationRegistry(maxNode + 1, maxInnovation + 1);
+      for (let i = 0; i < this.config.populationSize; i++) {
+        const base = this.warmSeeds[i % this.warmSeeds.length]!;
+        // ⚠️ `mutate` CLONES AND RETURNS; it does not mutate in place. Calling
+        // it for its side effect produced a population of twelve identical
+        // genomes — one policy wearing twelve hats, with nothing for selection
+        // to read and a whole run wasted before anyone noticed.
+        const id = this.nextGenomeId();
+        const seeded =
+          i < this.warmSeeds.length
+            ? // The first copy of each seed survives untouched, so the run can
+              // never open worse than the champion it started from.
+              cloneGenome(base, id)
+            : mutate(base, this.config, this.rng, this.registry, id);
+        this.genomes.push(seeded);
+      }
+      return;
+    }
     // One topology, drawn once, shared by the whole population. Only the weights
     // differ. Drawing it per genome makes generation 0 structurally noisy and
     // leaves speciation nothing real to read — see `initialTopology`.

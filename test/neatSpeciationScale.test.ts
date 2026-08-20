@@ -1,3 +1,4 @@
+import { OBSERVATION_SIZE } from "../simulation/src/ai/index.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -50,27 +51,34 @@ function pairwiseDistances(genomes: readonly Genome[], config = CONFIG): number[
 // ── what a starting genome actually is ──────────────────────────────────
 
 test("a starting genome is the interface, not accumulated complexity", () => {
-  // 87 nodes looks alarming next to XOR's four. It is 64 inputs + 1 bias + 22
+  // 103 nodes looks alarming next to XOR's four. It is 80 inputs + 1 bias + 22
   // outputs and ZERO hidden nodes — a minimal start for this problem, where the
   // node count is set by the observation and action spaces rather than by
-  // anything evolution did.
+  // anything evolution did. (80 since kingdom identity was added; it was 64.)
   const genome = freshPopulation().ask()[0]!;
   const byType = new Map<string, number>();
   for (const node of genome.nodes) byType.set(node.type, (byType.get(node.type) ?? 0) + 1);
 
-  assert.equal(byType.get("input"), 64);
+  assert.equal(byType.get("input"), OBSERVATION_SIZE);
   assert.equal(byType.get("bias"), 1);
   assert.equal(byType.get("output"), 22);
   assert.equal(byType.get("hidden") ?? 0, 0, "a minimal start has no hidden nodes");
-  assert.equal(genome.nodes.length, 87);
+  assert.equal(genome.nodes.length, OBSERVATION_SIZE + 1 + 22);
 });
 
 test("every connection in a starting genome is expressed", () => {
   const genome = freshPopulation().ask()[0]!;
   const size = genomeSize(genome);
   assert.equal(size.enabled, size.connections, "nothing starts disabled");
-  // Density is a configured fraction of the 65 x 22 interface, not emergent.
-  assert.ok(size.connections > 250 && size.connections < 450, `unexpected ${size.connections} genes`);
+  // Density is a configured fraction of the (inputs + bias) x outputs
+  // interface, not emergent — so the expected count is DERIVED rather than
+  // pinned, and widening the observation does not look like a defect.
+  const sources = OBSERVATION_SIZE + 1;
+  const expected = sources * 22 * 0.25;
+  assert.ok(
+    size.connections > expected * 0.75 && size.connections < expected * 1.25,
+    `unexpected ${size.connections} genes; ~${expected.toFixed(0)} expected at 25% of ${sources} x 22`,
+  );
   const outputsWired = new Set(genome.connections.filter((c) => c.enabled).map((c) => c.to));
   assert.equal(outputsWired.size, 22, "every output must be reachable or it emits a constant");
 });

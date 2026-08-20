@@ -58,7 +58,12 @@ test("a stale observation version is refused, and named", () => {
     () => assertModelCompatible(stale),
     (error: Error) => {
       assert.ok(error instanceof ModelCompatibilityError);
-      assert.match(error.message, /observationVersion: v0 -> v1/);
+      // Built from the constant so a schema bump does not break a test that
+      // is about the REFUSAL, not about which version is current.
+      assert.match(
+        error.message,
+        new RegExp(`observationVersion: v0 -> ${OBSERVATION_VERSION}`),
+      );
       return true;
     },
   );
@@ -107,8 +112,13 @@ test("kingdom count is part of identity", () => {
  * If this test fails: decide whether the change was intended. If it was, bump
  * OBSERVATION_VERSION and update these constants in the same commit.
  */
-test("the observation and visibility specifications are pinned to v1", () => {
-  assert.equal(OBSERVATION_VERSION, "v1");
+test("the observation and visibility specifications are pinned to v2", () => {
+  // v2 added sixteen kingdom-identity inputs (64 -> 80). Without them one
+  // network played all sixteen kingdoms with no way to tell which it was in,
+  // so every per-kingdom strategy had to be averaged into a single generic
+  // policy. Visibility is UNCHANGED — the bot sees no more than before, it
+  // just knows whose kit it is holding.
+  assert.equal(OBSERVATION_VERSION, "v2");
   assert.equal(ACTION_VERSION, "v1");
   assert.equal(
     visibilitySpecHash(),
@@ -117,7 +127,7 @@ test("the observation and visibility specifications are pinned to v1", () => {
   );
   assert.equal(
     observationSpecHash(),
-    "6f7ae1fb",
+    "36645ab0",
     "the observation contract changed — trained models are no longer valid",
   );
 });

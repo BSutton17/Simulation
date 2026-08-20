@@ -153,6 +153,14 @@ export interface TrainOptions {
    * rather than one strong policy handicapped at runtime.
    */
   onChampion?: (genome: Genome, generation: number, validation: number) => void;
+  /**
+   * Start from these genomes instead of a fresh random topology.
+   *
+   * A warm start keeps everything already paid for: the v1 champion took 1,140
+   * generations to find. Seeds are migrated onto the current observation first
+   * — see `warmStart.ts` — so a schema change does not force a restart.
+   */
+  warmSeeds?: readonly Genome[];
 }
 
 export async function train(options: TrainOptions): Promise<TrainingRunResult> {
@@ -184,10 +192,10 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
       restoredLastAdmitted = load.checkpoint.lastAdmitted ?? null;
       restoredChampionValidation = load.checkpoint.championValidation ?? null;
     } else {
-      population = new Population(ELEMENTALS_SHAPE, config.neat, config.seed);
+      population = new Population(ELEMENTALS_SHAPE, config.neat, config.seed, options.warmSeeds);
     }
   } else {
-    population = new Population(ELEMENTALS_SHAPE, config.neat, config.seed);
+    population = new Population(ELEMENTALS_SHAPE, config.neat, config.seed, options.warmSeeds);
   }
 
   // Owned here unless one was injected, so a caller that supplies a runner keeps

@@ -236,10 +236,14 @@ test("the reveal countdown is observable and normalized", () => {
 
 // ── the vector itself ───────────────────────────────────────────────────
 
-test("the observation is exactly 64 values, all in range", () => {
+test("the observation is exactly OBSERVATION_SIZE values, all in range", () => {
   const { snap } = setup();
   const values = snap();
-  assert.equal(values.length, 64);
+  // Read from the constant rather than pinned: the width is a design decision
+  // that legitimately moves (64 -> 80 when kingdom identity was added), and a
+  // literal made this fail for the change rather than for a defect. What must
+  // hold is that every slot is finite and in range.
+  assert.equal(values.length, OBSERVATION_SIZE);
   for (const [i, v] of values.entries()) {
     assert.ok(Number.isFinite(v), `input ${i} is not finite: ${v}`);
     assert.ok(v >= -1 && v <= 1, `input ${i} out of range: ${v}`);
@@ -261,5 +265,8 @@ test("encoding allocates nothing on a warm buffer", () => {
 test("a wrong-sized buffer is refused rather than silently truncated", () => {
   const { match, me, history } = setup();
   const knowledge = knowledgeFor(match, me, history);
-  assert.throws(() => encode(knowledge, new Float32Array(32)), /must be 64/);
+  assert.throws(
+    () => encode(knowledge, new Float32Array(32)),
+    new RegExp(`must be ${OBSERVATION_SIZE}`),
+  );
 });

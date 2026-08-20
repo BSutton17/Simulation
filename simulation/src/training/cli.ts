@@ -7,6 +7,7 @@ import { buildSlate, buildValidationSlate, slateSize, slateSeatCost, type MatchF
 import { estimateMatches, toModel, train, writeModel } from "./trainer.js";
 import { tableCount, type OpponentSelection, type SelfPlayConfig } from "./selfPlay.js";
 import { formatBaselines, runBaselines } from "./baselines.js";
+import { migrateSeeds } from "./warmStart.js";
 import { createRunner, defaultWorkerCount } from "./parallel/runner.js";
 import {
   behaviourDiversity,
@@ -183,6 +184,12 @@ async function trainCommand(): Promise<void> {
   );
   console.log(`  checkpoint: ${checkpointPath}${has("resume") ? " (resuming)" : ""}\n`);
 
+  const warmFrom = text("warm-from", "");
+  if (warmFrom) {
+    console.log(`  WARM START from ${warmFrom} — migrated onto the current observation
+`);
+  }
+
   const started = Date.now();
   // A one-line progress file beside the checkpoint.
   //
@@ -196,6 +203,7 @@ async function trainCommand(): Promise<void> {
     config,
     checkpointPath,
     resume: has("resume"),
+    warmSeeds: warmFrom ? migrateSeeds(warmFrom) : undefined,
     budgetMs: has("hours") ? flag("hours", 1) * 3_600_000 : undefined,
     onChampion: (genome, generation, validation) => {
       // One file per champion, so the whole lineage survives the run and a
@@ -493,6 +501,7 @@ switch (command) {
         "  --workers N            match worker threads; 1 runs in-process (default: two thirds of cores)",
         "  --validation-seeds N   repeats of each validation scenario on independent seeds (default 1)",
         "  --benchmark-every N    benchmark the champion against the heuristics every N generations (0 = never)",
+        "  --warm-from PATH       continue from a trained model instead of starting fresh",
         "  --seed N               run seed",
       ].join("\n"),
     );

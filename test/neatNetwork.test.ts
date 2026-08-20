@@ -171,6 +171,8 @@ test("a compiled genome satisfies the AI runtime's Network interface", () => {
 test("the Elementals genome shape matches the runtime's dimensions", () => {
   assert.equal(ELEMENTALS_SHAPE.inputs, OBSERVATION_SIZE);
   assert.equal(ELEMENTALS_SHAPE.outputs, ACTION_SIZE);
-  assert.equal(ELEMENTALS_SHAPE.inputs, 64);
+  // 80 since kingdom identity was added; the point of this test is that the
+  // genome shape AGREES with the runtime, not what the number happens to be.
+  assert.equal(ELEMENTALS_SHAPE.inputs, 80);
   assert.equal(ELEMENTALS_SHAPE.outputs, 22);
 });

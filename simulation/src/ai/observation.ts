@@ -1,5 +1,6 @@
 import type { PlayerKnowledge } from "./knowledge.js";
 import { KIT_SLOTS } from "./actions.js";
+import { KINGDOM_IDS } from "../../../src/data/kingdoms.js";
 import { OBSERVATION_VERSION } from "./versions.js";
 import { visibilitySpecHash } from "./visibility.js";
 
@@ -18,7 +19,10 @@ import { visibilitySpecHash } from "./visibility.js";
  * where a divisor does not.
  */
 
-export const OBSERVATION_SIZE = 64;
+export const OBSERVATION_SIZE = 80;
+
+/** Where the kingdom one-hot starts. */
+export const KINGDOM_BASE = 64;
 
 /** Where each group starts, so the layout is stated once. */
 export const SELF_BASE = 0;
@@ -150,6 +154,29 @@ export function encode(knowledge: PlayerKnowledge, out: Float32Array): void {
         ? clamp01(ability.upgradeLevel / ability.maxUpgradeLevel)
         : 0;
     out[base + 5] = Math.tanh(ability.heuristicValue / 1000);
+  }
+
+  // ── Group 6 · kingdom identity (64–79) ────────────────────────────────
+  //
+  // ⚠️ WITHOUT THIS THE NETWORK CANNOT TELL WHICH KINGDOM IT IS PLAYING.
+  //
+  // The kit slots are POSITIONAL: slot 3 is `flood` in Water and `hurricane` in
+  // Air, and nothing else in the vector distinguishes them. One network plays
+  // all sixteen kingdoms, so every per-kingdom strategy had to be averaged into
+  // a single generic policy — "cast slot 3 when the numbers look like this" —
+  // and a play that wins in one kingdom while losing in another cancelled out.
+  //
+  // Measured before this existed: a scripted policy that spams its cheapest
+  // attack AND fires its most expensive one beat pure spam outright in six of
+  // sixteen kingdoms. The trained network played neither, because it could not
+  // condition on which kingdom it was in.
+  //
+  // A one-hot rather than a scalar id: an index would imply that kingdom 3 sits
+  // between 2 and 4, which is meaningless and would leak a false ordering into
+  // the weights.
+  const kingdomIndex = KINGDOM_IDS.indexOf(self.kingdomId);
+  for (let i = 0; i < KINGDOM_IDS.length; i++) {
+    out[KINGDOM_BASE + i] = i === kingdomIndex ? 1 : 0;
   }
 }
 

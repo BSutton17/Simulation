@@ -73,7 +73,14 @@ export interface AiModel {
   readonly difficulty: Difficulty;
   readonly identity: AiModelIdentity;
   readonly training: AiModelTraining;
-  /** Typed in Phase 2, when the genome format exists. */
+  /**
+   * The trained network, as serialised by whatever produced it.
+   *
+   * Deliberately `unknown`. `ai/` must not import from `neat/` — the runtime
+   * never learns where its network came from, which is what lets a NEAT genome
+   * and any future representation drop in unchanged. `training/` is the layer
+   * that knows both and does the cast.
+   */
   readonly genome: unknown;
 }
 

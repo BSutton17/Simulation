@@ -390,7 +390,7 @@ function verdictOf(evaluation: CandidateEvaluation): number {
 export async function runSearch(config: SearchConfig = {}): Promise<SearchResult> {
   const schema = config.schema ?? buildSchema();
   const params = searchable(schema);
-  const fitnessConfig: FitnessConfig = config.fitness ?? {
+  let fitnessConfig: FitnessConfig = config.fitness ?? {
     weights: WEIGHT_PRESETS.designerPriority,
     weightsName: "designerPriority",
   };
@@ -526,6 +526,41 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
   const baselineFull = await evaluateCandidate(baselineCandidate, "full", cache, config, fitnessConfig);
   record(baselineFull);
   remember(baselineFull);
+
+  // ── Balance v4: calibrate the floor from THIS run's own baseline ──────────
+  //
+  // The floor exists so a candidate cannot trade fairness for ability usage. It
+  // has to be the incumbent's score measured the SAME way the candidates will
+  // be, or it is not a comparison at all.
+  //
+  // Transplanting a number from a previous run does not work, and the failure
+  // is silent and total: v3's reported full_score of 0.6762 came from its own
+  // tier and seed pool, and the shipped game measures 0.4849 on this one. A
+  // floor set from the former would have rejected every candidate INCLUDING the
+  // incumbent, and the campaign would have spent its hours discovering that
+  // nothing is acceptable. `BALANCE_V3_FLOOR` is kept as a documented reference
+  // point, not as a threshold to apply.
+  //
+  // Measured here, from the baseline this run just evaluated, on the tier the
+  // candidates use.
+  // A baseline that failed to evaluate leaves the floor OFF rather than
+  // guessing: an unmeasured floor is worse than none, because it would reject
+  // or admit candidates for a reason nobody chose.
+  const baselineFitness = baselineFull.fitness;
+  const measuredFloor = baselineFitness
+    ? Math.max(0, baselineFitness.weightedScore - baselineFitness.penalty)
+    : 0;
+  fitnessConfig = {
+    ...fitnessConfig,
+    usage: { ...fitnessConfig.usage, balanceFloor: measuredFloor },
+  };
+  config.onProgress?.({
+    kind: "generation",
+    generation: -1,
+    message: baselineFitness
+      ? `balance floor calibrated to ${measuredFloor.toFixed(6)} from this run's baseline`
+      : "balance floor OFF — the baseline could not be scored",
+  });
 
   const cma = resumed
     ? Cmaes.restore(resumed.cma)

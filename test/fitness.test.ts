@@ -10,6 +10,8 @@ import {
   normalisedDeviation,
   penalise,
   scoreFitness,
+  BALANCE_V3_FLOOR,
+  DEFAULT_USAGE_TARGETS,
   syntheticEvaluation,
   type FormatWeights,
   type SyntheticSpec,
@@ -387,4 +389,48 @@ test("v4: the objective stays inside [0,1] and strictly tracks balance", () => {
     assert.ok(r.searchObjective < previous, `not monotonic at ${imbalance}`);
     previous = r.searchObjective;
   }
+});
+
+test("v4: the balance floor is ACTIVE by default, not merely available", () => {
+  // The floor is only a guard if it is on without being asked for. An earlier
+  // version defaulted it to 0 "so an ad-hoc call does not fail everything",
+  // which would have shipped a v4 search with no floor at all.
+  assert.equal(DEFAULT_USAGE_TARGETS.balanceFloor, BALANCE_V3_FLOOR);
+  assert.ok(BALANCE_V3_FLOOR > 0, "a zero floor enforces nothing");
+
+  // Scored with NO config at all — exactly how the search calls it.
+  const wrecked = scoreFitness(
+    syntheticEvaluation({
+      id: "wrecked", duelImbalance: 0.9, ffa4Imbalance: 0.9, ffa7Imbalance: 0.9,
+      usage: healthyUsage(),
+    }),
+  );
+  const violation = wrecked.violations.find((v) => v.kind === "balanceRegression");
+  assert.ok(violation, "a candidate below the floor must be refused by default");
+  assert.equal(violation!.threshold, BALANCE_V3_FLOOR);
+  assert.ok(violation!.observed < BALANCE_V3_FLOOR);
+});
+
+test("v4: a well-balanced synthetic clears the declared floor", () => {
+  // ⚠️ Deliberately narrow, and named for what it actually checks. A synthetic
+  // fair game scores ~0.99 and clears any sane floor, so this does NOT prove
+  // the shipped game clears it — measured on the validation pool the real v3
+  // game scores 0.4849 after penalties and would FAIL this floor. That gap is
+  // why `search/run.ts` calibrates the floor from each run's own baseline
+  // instead of transplanting a constant, and why this test does not pretend to
+  // cover it.
+  const incumbent = scoreFitness(
+    syntheticEvaluation({
+      id: "incumbent", duelImbalance: 0.1, ffa4Imbalance: 0.1, ffa7Imbalance: 0.1,
+      usage: healthyUsage(),
+    }),
+  );
+  assert.ok(
+    incumbent.weightedScore > BALANCE_V3_FLOOR,
+    `a well-balanced game scores ${incumbent.weightedScore}, below the floor ${BALANCE_V3_FLOOR}`,
+  );
+  assert.equal(
+    incumbent.violations.filter((v) => v.kind === "balanceRegression").length,
+    0,
+  );
 });

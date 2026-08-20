@@ -149,6 +149,28 @@ export interface UsageTargets {
   weight: number;
 }
 
+/**
+ * The incumbent's balance score — the line balance v4 may not fall below.
+ *
+ * This is gen059-c12's `full_score`, the winner of the 60-generation search
+ * that produced the shipped v3 numbers. It is the balance the game HAS, so a
+ * v4 candidate scoring under it has traded fairness for usage, which is the one
+ * thing v4 exists to prevent.
+ *
+ * ⚠️ IT IS A REFERENCE, NOT A THRESHOLD TO TRANSPLANT. A fitness score only
+ * means something next to the tier and seed pool that produced it. This number
+ * came from the search's own full tier; the same shipped game measures 0.4849
+ * on the validation pool. Applying it across that gap would have rejected every
+ * candidate INCLUDING the incumbent, and the campaign would have spent its
+ * hours discovering that nothing is acceptable.
+ *
+ * So `search/run.ts` CALIBRATES the real floor from the baseline it evaluates
+ * at the start of every run, on the same tier the candidates use, and overrides
+ * this. What remains here is the declared v4 intent and a documented anchor for
+ * anyone comparing runs by hand.
+ */
+export const BALANCE_V3_FLOOR = 0.676161465883646;
+
 export const DEFAULT_USAGE_TARGETS: UsageTargets = {
   // 80/80. The point of v4 is that every ability is reachable, so the target is
   // not a comfortable fraction.
@@ -156,9 +178,7 @@ export const DEFAULT_USAGE_TARGETS: UsageTargets = {
   // Bots currently buy zero. Two per match is "shields are part of play"
   // without demanding they be spammed.
   shieldsPerMatch: 2,
-  // Set by the caller from the incumbent's measured score. Off by default so an
-  // ad-hoc scoring call does not silently fail everything.
-  balanceFloor: 0,
+  balanceFloor: BALANCE_V3_FLOOR,
   weight: 0.15,
 };
 
@@ -600,19 +620,32 @@ export function scoreFitness(
   // other catastrophe — which is what stops usage being bought with fairness.
   const targets = { ...DEFAULT_USAGE_TARGETS, ...config.usage };
   const usage = scoreUsage(result.usage, targets);
-  if (targets.balanceFloor > 0 && weightedScore < targets.balanceFloor) {
+
+  // Penalties are computed BEFORE the floor is tested, because the floor is
+  // compared against the POST-penalty balance.
+  //
+  // ⚠️ This was a units bug and it made the guard nearly inert. The floor comes
+  // from a candidate's reported `full_score`, which is balance MINUS penalties.
+  // Comparing it against the pre-penalty `weightedScore` measured a different
+  // quantity on a different scale: a synthetic game at 0.9 imbalance with
+  // fifteen constraint violations still scored 0.7010 pre-penalty and sailed
+  // over a 0.676 floor. Only total collapse tripped it.
+  const balancePenalty = Math.min(0.5, violations.length * limits.penaltyPerViolation);
+  const balanceAfterPenalty = clamp01(weightedScore - balancePenalty);
+  if (targets.balanceFloor > 0 && balanceAfterPenalty < targets.balanceFloor) {
     violations.push({
       format: "overall",
       kind: "balanceRegression",
       subject: "balance",
-      observed: weightedScore,
+      observed: balanceAfterPenalty,
       threshold: targets.balanceFloor,
       detail:
-        `balance ${weightedScore.toFixed(4)} is below the floor ` +
+        `balance ${balanceAfterPenalty.toFixed(4)} (after penalties) is below the floor ` +
         `${targets.balanceFloor.toFixed(4)} — usage must not be bought with fairness`,
     });
   }
 
+  // Recomputed so the regression itself is penalised like any other violation.
   const penalty = Math.min(0.5, violations.length * limits.penaltyPerViolation);
   // The continuous signal: penalised but never capped, so partial progress is
   // visible to a search. The cap is applied only to `overall` below.

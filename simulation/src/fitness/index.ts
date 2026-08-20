@@ -23,6 +23,7 @@ export {
   type DeadBands,
   type ComponentWeights,
   type Constraints,
+  BALANCE_V3_FLOOR,
   DEFAULT_USAGE_TARGETS,
   scoreUsage,
   type UsageTargets,

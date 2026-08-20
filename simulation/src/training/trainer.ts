@@ -70,6 +70,15 @@ export interface GenerationRecord extends GenerationReport {
   validationPlacement: number | null;
   /** Its casts per match — the check that a policy has not collapsed to waiting. */
   validationCastsPerMatch: number | null;
+  /**
+   * Mean distinct abilities the champion reached per match, and the kit size.
+   *
+   * THE headline metric for a v3 run. Casts alone cannot tell "used the whole
+   * kit" from "spammed one ability", which is the exact confusion v3 exists to
+   * remove — so the number that decides whether it worked has to be in the log.
+   */
+  validationDistinctAbilities: number | null;
+  validationKitSize: number | null;
   /** Mean pairwise compatibility distance — 0 means one policy wearing hats. */
   diversity: number;
   /** Mean ENABLED connections; `meanConnections` counts disabled genes too. */
@@ -369,6 +378,8 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
     let validationWinRate: number | null = null;
     let validationPlacement: number | null = null;
     let validationCastsPerMatch: number | null = null;
+    let validationDistinctAbilities: number | null = null;
+    let validationKitSize: number | null = null;
     if (validationSlate && config.validateEvery > 0 && generation % config.validateEvery === 0) {
       const ranked = results
         .map((result, index) => ({ fitness: result.fitness, index }))
@@ -410,6 +421,13 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
         validationPlacement = bestResult.meanPlacement;
         validationCastsPerMatch =
           bestResult.matches > 0 ? bestResult.totalCasts / bestResult.matches : 0;
+        validationDistinctAbilities =
+          bestResult.scenarios.length > 0
+            ? bestResult.scenarios.reduce((s, x) => s + x.distinctAbilities, 0) /
+              bestResult.scenarios.length
+            : 0;
+        validationKitSize =
+          bestResult.scenarios.length > 0 ? bestResult.scenarios[0]!.kitSize : 0;
         if (championValidation === null || bestResult.fitness > championValidation) {
           const snapshot = cloneGenome(bestGenome);
           snapshot.fitness = bestResult.fitness;
@@ -478,6 +496,8 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
       validationWinRate,
       validationPlacement,
       validationCastsPerMatch,
+      validationDistinctAbilities,
+      validationKitSize,
       diversity: geneticDiversity(genomes, config.neat),
       meanExpressed:
         genomes.reduce((sum, genome) => sum + expressedConnections(genome), 0) /

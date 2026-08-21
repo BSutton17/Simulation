@@ -282,6 +282,10 @@ const emptyStats = (): ControllerStats => ({
   retargets: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
   actionSwitches: 0, distinctActions: 0, legalOffered: 0,
   castLegal: [0, 0, 0, 0, 0], castChosen: [0, 0, 0, 0, 0],
+  castBlockedNotUnlocked: [0, 0, 0, 0, 0],
+  castBlockedNotAffordable: [0, 0, 0, 0, 0],
+  castBlockedOther: [0, 0, 0, 0, 0],
+  investAffordable: [0, 0, 0, 0, 0], investChosen: [0, 0, 0, 0, 0],
 });
 
 /**

@@ -136,16 +136,26 @@ test("fitness weights are untouched by this change", () => {
   assert.deepEqual(WEIGHT_PRESETS.designerPriority, { ffa4: 0.5, ffa7: 0.35, duel: 0.15 });
 });
 
-test("the ability-only search space is 180 dimensions", () => {
+test("the ability-only search space covers acquisition as well as use", () => {
   const v2 = buildSchema({ scope: "expanded" });
   assert.equal(v2.version, "v2");
-  // 180, not 181: balance v4 removed Poison Apple's permanent-duration
-  // sentinel, which was a dimension that could not change the game.
-  assert.equal(searchable(v2).length, 180);
-  assert.ok(searchable(v2).every((p) => p.id.startsWith("ability.")), "abilities only");
+  const dims = searchable(v2);
+
+  // 248 = the previous 180 use-dials plus 68 unlock prices.
+  //
+  // ⚠️ THE UNLOCK DIALS ARE THE POINT, and their absence is what defeated the
+  // last campaign. For 78 of 80 abilities the unlock price was DERIVED as
+  // ceil(cost/2), so the search could not make an ability affordable to ACQUIRE
+  // without also making it cheap to SPAM. 13 of 16 never-cast abilities turned
+  // out to be never BOUGHT — Earthquake's 350-gold unlock was affordable on
+  // zero of ~5,000 decisions against a median peak liquidity of 253.
+  assert.equal(dims.length, 248);
+  const unlocks = dims.filter((p) => p.id.endsWith(".unlockCost"));
+  assert.equal(unlocks.length, 68, "acquisition price must be searchable");
+  assert.ok(dims.every((p) => p.id.startsWith("ability.")), "abilities only");
   // The 20 curated passive/system dials must not have crept back in.
   for (const id of ["castle.repairCost", "shield.cost", "passive.nature.0.pct", "economy.incomePerCitizen"]) {
-    assert.ok(!searchable(v2).some((p) => p.id === id), `${id} must not be searched`);
+    assert.ok(!dims.some((p) => p.id === id), `${id} must not be searched`);
   }
 });
 

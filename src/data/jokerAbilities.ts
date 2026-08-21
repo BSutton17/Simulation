@@ -51,6 +51,7 @@ export const ACE_OF_SPADES: AbilityDefinition = {
   name: "Ace of Spades",
   kind: "attack",
   cost: 81,
+  unlockCost: 41,
   cooldownTicks: Math.round(2.15 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -148,6 +149,7 @@ export const BLACKJACK: AbilityDefinition = {
   name: "Blackjack",
   kind: "attack",
   cost: 385,
+  unlockCost: 193,
   cooldownTicks: Math.round(6.6 * TICK.RATE), // 11 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -231,6 +233,7 @@ export const LUCKY_DRAW: AbilityDefinition = {
   name: "Lucky Draw",
   kind: "utility",
   cost: 308,
+  unlockCost: 154,
   cooldownTicks: Math.round(51.05 * TICK.RATE), // 36.5 s
   targeting: { mode: "self" },
   effects: [
@@ -304,6 +307,7 @@ export const ROULETTE: AbilityDefinition = {
   name: "Roulette",
   kind: "attack",
   cost: 255,
+  unlockCost: 128,
   cooldownTicks: Math.round(22.3 * TICK.RATE), // 30 s
   targeting: { mode: "singleEnemy" },
   effects: [{ type: "roulette", target: "target", params: {} }],
@@ -333,6 +337,7 @@ export const SLOT_MACHINE: AbilityDefinition = {
   name: "Slot Machine",
   kind: "ultimate",
   cost: 903,
+  unlockCost: 452,
   cooldownTicks: Math.round(55.8 * TICK.RATE), // 93 s
   targeting: { mode: "allEnemies" },
   effects: [{ type: "slotMachine", target: "target", params: {} }],

@@ -33,6 +33,7 @@ export const SHOOTING_STAR: AbilityDefinition = {
   name: "Shooting Star",
   kind: "attack",
   cost: 76,
+  unlockCost: 38,
   cooldownTicks: Math.round(1.9 * TICK.RATE), // 2.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -67,6 +68,7 @@ export const SATURNS_RINGS: AbilityDefinition = {
   name: "Saturn's Rings",
   kind: "attack",
   cost: 296,
+  unlockCost: 148,
   cooldownTicks: Math.round(15.4 * TICK.RATE), // 11 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -102,6 +104,7 @@ export const SUPERNOVA: AbilityDefinition = {
   name: "Supernova",
   kind: "attack",
   cost: 368,
+  unlockCost: 184,
   cooldownTicks: Math.round(8.1 * TICK.RATE), // 13 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -158,6 +161,7 @@ export const ORIONS_BELT: AbilityDefinition = {
   name: "Orion's Belt",
   kind: "utility",
   cost: 200,
+  unlockCost: 100,
   cooldownTicks: 20 * TICK.RATE, // 20 s
   targeting: { mode: "self" },
   effects: [
@@ -193,6 +197,7 @@ export const BLACK_HOLE: AbilityDefinition = {
   name: "Black Hole",
   kind: "ultimate",
   cost: 546,
+  unlockCost: 273,
   cooldownTicks: Math.round(37.85 * TICK.RATE), // 54 s
   targeting: { mode: "self" },
   effects: [

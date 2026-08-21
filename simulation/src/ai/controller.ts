@@ -13,6 +13,7 @@ import type { Rng } from "../rng.js";
 import {
   ACTION_SIZE,
   CAST_BASE,
+  INVEST_BASE,
   KIT_SLOTS,
   PRIMARY_ACTION_COUNT,
   WAIT,
@@ -101,6 +102,29 @@ export interface ControllerStats {
    */
   castLegal: number[];
   castChosen: number[];
+  /**
+   * WHY a slot was not castable, counted per decision and per reason.
+   *
+   * ⚠️ "NEVER LEGAL" IS THREE DIFFERENT PROBLEMS WEARING ONE LABEL, and the
+   * distinction decides who can fix it:
+   *
+   *   notUnlocked  — the policy never spent the gold to BUY the ability. That is
+   *     an investment decision, not a price one. A cheaper ultimate still never
+   *     appears if the network would rather buy citizens.
+   *   notAffordable — bought, but never enough gold in hand to cast. THIS is the
+   *     one a price change fixes.
+   *   otherwise blocked — cooldown, charges, a meter, a status, the centrepiece,
+   *     or a payload the action space cannot express.
+   *
+   * Balance V4 assumed the middle case and moved prices. Coverage went from
+   * 64/80 to 62/80, so the assumption is worth checking rather than repeating.
+   */
+  castBlockedNotUnlocked: number[];
+  castBlockedNotAffordable: number[];
+  castBlockedOther: number[];
+  /** Decisions on which BUYING this slot was affordable, and on which it was bought. */
+  investAffordable: number[];
+  investChosen: number[];
 }
 
 export class NetworkController implements AIController {
@@ -128,6 +152,11 @@ export class NetworkController implements AIController {
     actionSwitches: 0, distinctActions: 0, legalOffered: 0,
     castLegal: new Array<number>(KIT_SLOTS).fill(0),
     castChosen: new Array<number>(KIT_SLOTS).fill(0),
+    castBlockedNotUnlocked: new Array<number>(KIT_SLOTS).fill(0),
+    castBlockedNotAffordable: new Array<number>(KIT_SLOTS).fill(0),
+    castBlockedOther: new Array<number>(KIT_SLOTS).fill(0),
+    investAffordable: new Array<number>(KIT_SLOTS).fill(0),
+    investChosen: new Array<number>(KIT_SLOTS).fill(0),
   };
 
   /** Diagnostics only: what was chosen last, and everything chosen so far. */
@@ -183,7 +212,18 @@ export class NetworkController implements AIController {
       if (this.mask[i] === 1) this.stats.legalOffered += 1;
     }
     for (let slot = 0; slot < KIT_SLOTS; slot++) {
-      if (this.mask[CAST_BASE + slot] === 1) this.stats.castLegal[slot]! += 1;
+      if (this.mask[CAST_BASE + slot] === 1) {
+        this.stats.castLegal[slot]! += 1;
+        continue;
+      }
+      // Attributed in the order the player experiences them: an ability you have
+      // not bought is not "too expensive to cast", it is not yours yet.
+      const kit = knowledge.self.kit[slot];
+      if (kit === undefined) continue;
+      if (!kit.unlocked) this.stats.castBlockedNotUnlocked[slot]! += 1;
+      else if (!kit.affordable) this.stats.castBlockedNotAffordable[slot]! += 1;
+      else this.stats.castBlockedOther[slot]! += 1;
+      if (kit.investAffordable) this.stats.investAffordable[slot]! += 1;
     }
 
     let decision = decide(this.out, this.mask, {
@@ -202,6 +242,12 @@ export class NetworkController implements AIController {
       decision.primaryIndex < CAST_BASE + KIT_SLOTS
     ) {
       this.stats.castChosen[decision.primaryIndex - CAST_BASE]! += 1;
+    }
+    if (
+      decision.primaryIndex >= INVEST_BASE &&
+      decision.primaryIndex < INVEST_BASE + KIT_SLOTS
+    ) {
+      this.stats.investChosen[decision.primaryIndex - INVEST_BASE]! += 1;
     }
     this.previousAction = decision.primaryIndex;
     this.actionsSeen.add(decision.primaryIndex);

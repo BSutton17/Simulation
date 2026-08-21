@@ -119,6 +119,7 @@ export const SLUDGE: AbilityDefinition = {
   name: "Sludge",
   kind: "attack",
   cost: 280,
+  unlockCost: 140,
   cooldownTicks: Math.round(1.85 * TICK.RATE), // 3 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -165,6 +166,7 @@ export const ACID_RAIN: AbilityDefinition = {
   name: "Acid Rain",
   kind: "attack",
   cost: 412,
+  unlockCost: 206,
   cooldownTicks: Math.round(5.85 * TICK.RATE), // 9.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -219,6 +221,7 @@ export const GASTRO_ACID: AbilityDefinition = {
   name: "Gastro Acid",
   kind: "attack",
   cost: 420,
+  unlockCost: 210,
   cooldownTicks: Math.round(19.2 * TICK.RATE), // 18.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -279,6 +282,7 @@ export const POISON_APPLE: AbilityDefinition = {
   name: "Poison Apple",
   kind: "utility",
   cost: 217,
+  unlockCost: 109,
   cooldownTicks: Math.round(15.4 * TICK.RATE), // 21 s
   targeting: { mode: "self" },
   effects: [
@@ -314,6 +318,7 @@ export const TOXIC_GAS: AbilityDefinition = {
   name: "Toxic Gas",
   kind: "ultimate",
   cost: 979,
+  unlockCost: 490,
   cooldownTicks: Math.round(104.65 * TICK.RATE), // 74.75 s
   targeting: { mode: "allEnemies" },
   effects: [

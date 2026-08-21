@@ -19,6 +19,7 @@ export const ROCK_THROW: AbilityDefinition = {
   name: "Rock Throw",
   kind: "attack",
   cost: 133,
+  unlockCost: 67,
   cooldownTicks: Math.round(1.55 * TICK.RATE), // 1.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -73,6 +74,7 @@ export const METEOR_SHOWER: AbilityDefinition = {
   name: "Meteor Shower",
   kind: "attack",
   cost: 378,
+  unlockCost: 189,
   cooldownTicks: Math.round(14.9 * TICK.RATE), // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [meteorHit(), meteorHit(), meteorHit(), meteorHit(), meteorHit()],
@@ -117,6 +119,7 @@ export const EARTHQUAKE: AbilityDefinition = {
   name: "Earthquake",
   kind: "attack",
   cost: 699,
+  unlockCost: 350,
   cooldownTicks: Math.round(18.15 * TICK.RATE), // 17.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -208,6 +211,7 @@ export const NATURAL_TERRAIN: AbilityDefinition = {
   name: "Natural Terrain",
   kind: "utility",
   cost: 350,
+  unlockCost: 175,
   cooldownTicks: Math.round(39.1 * TICK.RATE), // 36.75 s
   targeting: { mode: "self" },
   effects: [
@@ -242,6 +246,7 @@ export const BRICK_WALL: AbilityDefinition = {
   name: "Brick Wall",
   kind: "ultimate",
   cost: 545,
+  unlockCost: 273,
   cooldownTicks: Math.round(139.3 * TICK.RATE), // 99.5 s
   targeting: { mode: "self" },
   effects: [

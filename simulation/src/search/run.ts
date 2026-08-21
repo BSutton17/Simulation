@@ -550,16 +550,26 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
   const measuredFloor = baselineFitness
     ? Math.max(0, baselineFitness.weightedScore - baselineFitness.penalty)
     : 0;
+  // The coverage floor is calibrated the same way and for the same reason: the
+  // incumbent's own reach, measured on the tier the candidates use. A candidate
+  // that casts fewer distinct abilities than the shipped game is a regression
+  // however fair it is.
+  const measuredCoverage = baselineFitness?.usage?.abilitiesUsed ?? 0;
   fitnessConfig = {
     ...fitnessConfig,
-    usage: { ...fitnessConfig.usage, balanceFloor: measuredFloor },
+    usage: {
+      ...fitnessConfig.usage,
+      balanceFloor: measuredFloor,
+      coverageFloor: measuredCoverage,
+    },
   };
   config.onProgress?.({
     kind: "generation",
     generation: -1,
     message: baselineFitness
-      ? `balance floor calibrated to ${measuredFloor.toFixed(6)} from this run's baseline`
-      : "balance floor OFF — the baseline could not be scored",
+      ? `floors calibrated from this run's baseline — balance ${measuredFloor.toFixed(6)}, ` +
+        `coverage ${measuredCoverage}/${baselineFitness.usage.abilitiesTotal} abilities cast`
+      : "floors OFF — the baseline could not be scored",
   });
 
   const cma = resumed

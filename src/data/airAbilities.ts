@@ -83,6 +83,7 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
   name: "A Light Breeze",
   kind: "attack",
   cost: 63,
+  unlockCost: 32,
   cooldownTicks: Math.round(3.75 * TICK.RATE), // 3 s
   targeting: { mode: "singleEnemy" },
   // Bird's Eye View turns a multi-target Breeze into a bouncing gust: full
@@ -129,6 +130,7 @@ export const HURRICANE: AbilityDefinition = {
   name: "Hurricane",
   kind: "attack",
   cost: 177,
+  unlockCost: 89,
   cooldownTicks: Math.round(13.2 * TICK.RATE), // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -185,6 +187,7 @@ export const THICK_FOG: AbilityDefinition = {
   name: "Thick Fog",
   kind: "attack",
   cost: 255,
+  unlockCost: 128,
   cooldownTicks: Math.round(20.3 * TICK.RATE), // 14.5 s
   targeting: { mode: "singleEnemy" },
   maxConcurrentAffected: { statusId: "vision:fog", limit: 3 },
@@ -240,6 +243,7 @@ export const BIRDS_EYE_VIEW: AbilityDefinition = {
   name: "Bird's Eye View",
   kind: "utility",
   cost: 100,
+  unlockCost: 50,
   cooldownTicks: 20 * TICK.RATE, // 20 s
   targeting: { mode: "self" },
   effects: [
@@ -275,6 +279,7 @@ export const DUST_BUNNIES: AbilityDefinition = {
   name: "Dust Bunnies",
   kind: "ultimate",
   cost: 300,
+  unlockCost: 150,
   cooldownTicks: Math.round(64.85 * TICK.RATE), // 93.25 s
   targeting: { mode: "allEnemies" },
   effects: [

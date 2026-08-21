@@ -72,6 +72,7 @@ export const LIGHT_BEAM: AbilityDefinition = {
   name: "Light Beam",
   kind: "attack",
   cost: 45,
+  unlockCost: 23,
   cooldownTicks: Math.round(3.4 * TICK.RATE), // 2.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -127,6 +128,7 @@ export const FIREFLIES: AbilityDefinition = {
   name: "Fireflies",
   kind: "attack",
   cost: 153,
+  unlockCost: 77,
   cooldownTicks: Math.round(13.4 * TICK.RATE), // 16.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -174,6 +176,7 @@ export const ILLUMINATION: AbilityDefinition = {
   name: "Illumination",
   kind: "attack",
   cost: 276,
+  unlockCost: 138,
   cooldownTicks: Math.round(21.45 * TICK.RATE), // 20.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -252,6 +255,7 @@ export const FLASH_BANG: AbilityDefinition = {
   name: "Flash Bang",
   kind: "utility",
   cost: 150,
+  unlockCost: 75,
   cooldownTicks: 25 * TICK.RATE, // 25 s
   targeting: { mode: "self" },
   effects: [
@@ -315,6 +319,7 @@ export const LIGHT_SHOW: AbilityDefinition = {
   name: "Light Show",
   kind: "ultimate",
   cost: 577,
+  unlockCost: 289,
   cooldownTicks: Math.round(45.4 * TICK.RATE), // 45.25 s
   targeting: { mode: "self" },
   effects: [

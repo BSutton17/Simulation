@@ -250,20 +250,44 @@ const NEVER_CAST = new Set([
  * integers in the engine and are searched as integers, so a candidate never
  * describes a game with a fractional tick.
  */
+/**
+ * ⚠️ `unlockCost` IS A SEPARATE DIAL FROM `cost`, and welding them together is
+ * what cost the last campaign its whole budget.
+ *
+ * What a player pays to ACQUIRE an ability and what they pay to USE it are
+ * different levers on different problems. Acquisition decides whether an
+ * ability enters the game at all; casting price decides whether it gets spammed
+ * once it has. For 78 of 80 abilities the unlock price used to be DERIVED as
+ * `ceil(cost * 0.5)`, so the search could only move both at once.
+ *
+ * Measured: 13 of the 16 never-cast abilities are never BOUGHT, not cast too
+ * rarely. The AI's median peak liquidity in a match is 253 gold; Earthquake's
+ * unlock is 350 and Riptide's 673, and both were affordable on ZERO of ~5,000
+ * decisions. Bringing those within reach through `cost` alone would have halved
+ * the spam price too, which wrecks balance — so the search correctly refused,
+ * and forty generations left ability coverage worse than it started (64/80 ->
+ * 62/80).
+ *
+ * Split, the search can make an ultimate REACHABLE while keeping it expensive
+ * to fire, which is the shape the game actually wants.
+ */
 const ABILITY_DIALS: Record<string, { suffix: string; type: ParameterType; label: string }[]> = {
   attack: [
     { suffix: "effects.0.amount", type: "continuous", label: "damage" },
     { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
     { suffix: "cost", type: "integer", label: "cost" },
+    { suffix: "unlockCost", type: "integer", label: "unlock price" },
   ],
   utility: [
     { suffix: "effects.0.durationTicks", type: "integer", label: "duration" },
     { suffix: "cost", type: "integer", label: "cost" },
     { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
+    { suffix: "unlockCost", type: "integer", label: "unlock price" },
   ],
   ultimate: [
     { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
     { suffix: "cost", type: "integer", label: "cost" },
+    { suffix: "unlockCost", type: "integer", label: "unlock price" },
   ],
 };
 

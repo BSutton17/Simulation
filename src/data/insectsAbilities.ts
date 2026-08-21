@@ -106,6 +106,7 @@ export const VENOM_SHOT: AbilityDefinition = {
   name: "Venom Shot",
   kind: "attack",
   cost: 168,
+  unlockCost: 84,
   cooldownTicks: Math.round(3.5 * TICK.RATE), // 2.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -146,6 +147,7 @@ export const BUTTERFLIES: AbilityDefinition = {
   name: "Butterflies",
   kind: "attack",
   cost: 494,
+  unlockCost: 247,
   cooldownTicks: Math.round(17.35 * TICK.RATE), // 15 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -190,6 +192,7 @@ export const INFECTED: AbilityDefinition = {
   name: "Infected",
   kind: "attack",
   cost: 532,
+  unlockCost: 266,
   cooldownTicks: Math.round(10.5 * TICK.RATE), // 17.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -234,6 +237,7 @@ export const CREEPY_CRAWLERS: AbilityDefinition = {
   name: "Creepy Crawlers",
   kind: "utility",
   cost: 300,
+  unlockCost: 150,
   cooldownTicks: 30 * TICK.RATE, // 30 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -280,6 +284,7 @@ export const CAPRICE: AbilityDefinition = {
   name: "Caprice",
   kind: "ultimate",
   cost: 735,
+  unlockCost: 368,
   cooldownTicks: Math.round(97.8 * TICK.RATE), // 163 s
   targeting: { mode: "self" },
   effects: [

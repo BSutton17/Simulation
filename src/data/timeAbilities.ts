@@ -26,6 +26,7 @@ export const TIK_TOK: AbilityDefinition = {
   name: "Tik Tok",
   kind: "attack",
   cost: 84,
+  unlockCost: 42,
   cooldownTicks: Math.round(4.35 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -82,6 +83,7 @@ export const HALF_PASSED_12: AbilityDefinition = {
   name: "Half Passed 12",
   kind: "attack",
   cost: 141,
+  unlockCost: 71,
   cooldownTicks: Math.round(16.5 * TICK.RATE), // 27.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -147,6 +149,7 @@ export const FATHER_TIME: AbilityDefinition = {
   name: "Father Time",
   kind: "attack",
   cost: 593,
+  unlockCost: 297,
   cooldownTicks: Math.round(13.35 * TICK.RATE), // 22.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -190,6 +193,7 @@ export const BLIP: AbilityDefinition = {
   name: "Blip!",
   kind: "utility",
   cost: 105,
+  unlockCost: 53,
   cooldownTicks: Math.round(5.4 * TICK.RATE), // 9 s
   targeting: { mode: "self" },
   effects: [
@@ -238,6 +242,7 @@ export const BACK_TO_THE_FUTURE: AbilityDefinition = {
   name: "Back to the Future",
   kind: "ultimate",
   cost: 900,
+  unlockCost: 450,
   cooldownTicks: 90 * TICK.RATE, // 90 s
   targeting: { mode: "allEnemies" },
   effects: [

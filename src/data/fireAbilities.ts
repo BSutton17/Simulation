@@ -79,6 +79,7 @@ export const FIREBALL: AbilityDefinition = {
   name: "Fireball",
   kind: "attack",
   cost: 123,
+  unlockCost: 62,
   cooldownTicks: Math.round(2.15 * TICK.RATE), // 2.75 s
   targeting: { mode: "singleEnemy" },
   // A plain damage attack — Burn is applied only by Scorching Sun (guaranteed)
@@ -122,6 +123,7 @@ export const SCORCHING_SUN: AbilityDefinition = {
   name: "Scorching Sun",
   kind: "attack",
   cost: 171,
+  unlockCost: 86,
   cooldownTicks: Math.round(12.2 * TICK.RATE), // 8.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -187,6 +189,7 @@ export const FIRENADO: AbilityDefinition = {
   name: "Firenado",
   kind: "attack",
   cost: 208,
+  unlockCost: 104,
   cooldownTicks: Math.round(13.8 * TICK.RATE), // 23 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -311,6 +314,7 @@ export const HEAT_WAVE: AbilityDefinition = {
   name: "Heat Wave",
   kind: "utility",
   cost: 133,
+  unlockCost: 67,
   cooldownTicks: Math.round(9.45 * TICK.RATE), // 15.75 s
   targeting: { mode: "self" },
   effects: [
@@ -373,6 +377,7 @@ export const BLAZING_DETERMINATION: AbilityDefinition = {
   name: "Blazing Determination",
   kind: "utility",
   cost: 650,
+  unlockCost: 325,
   cooldownTicks: 35 * TICK.RATE, // 30s
   targeting: { mode: "self" },
   effects: [

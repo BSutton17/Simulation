@@ -434,3 +434,76 @@ test("v4: a well-balanced synthetic clears the declared floor", () => {
     0,
   );
 });
+
+
+// ---------------------------------------------------------------------------
+// v4: the coverage floor — the other half of the guard
+//
+// The balance floor stopped fairness being sold for usage. Nothing stopped the
+// reverse, and the reverse is what actually happened: usage is a reserved share
+// worth ~0.105 of the objective while balance swings 0.3+, so a candidate that
+// improved fairness by pricing an ability out of the game won every time. Forty
+// generations ended at 62 abilities cast having started at 64.
+// ---------------------------------------------------------------------------
+
+test("v4: a candidate that casts fewer abilities than the incumbent is a regression", () => {
+  const spec = { id: "narrower", duelImbalance: 0.05, ffa4Imbalance: 0.05, ffa7Imbalance: 0.05 };
+
+  // A BETTER-balanced game that reaches fewer abilities. Without the floor this
+  // is a straight win, which is exactly how coverage was lost.
+  const narrower = scoreFitness(
+    syntheticEvaluation({ ...spec, usage: healthyUsage({ abilitiesUsed: 55 }) }),
+    { usage: { coverageFloor: 64, balanceFloor: 0 } },
+  );
+  assert.ok(
+    narrower.violations.some((v) => v.kind === "coverageRegression"),
+    "casting fewer distinct abilities than the incumbent must register as a violation",
+  );
+
+  // At the floor exactly, no violation: the guard refuses REGRESSION, not
+  // stagnation — same rule the champion win-rate floor follows.
+  const level = scoreFitness(
+    syntheticEvaluation({ ...spec, usage: healthyUsage({ abilitiesUsed: 64 }) }),
+    { usage: { coverageFloor: 64, balanceFloor: 0 } },
+  );
+  assert.ok(
+    !level.violations.some((v) => v.kind === "coverageRegression"),
+    "matching the incumbent's reach must not be punished",
+  );
+});
+
+test("v4: a narrower game cannot outscore a broader one of equal balance", () => {
+  const spec = { id: "equal", duelImbalance: 0.1, ffa4Imbalance: 0.1, ffa7Imbalance: 0.1 };
+  const broad = scoreFitness(
+    syntheticEvaluation({ ...spec, usage: healthyUsage({ abilitiesUsed: 70 }) }),
+    { usage: { coverageFloor: 64, balanceFloor: 0 } },
+  );
+  const narrow = scoreFitness(
+    syntheticEvaluation({ ...spec, usage: healthyUsage({ abilitiesUsed: 50 }) }),
+    { usage: { coverageFloor: 64, balanceFloor: 0 } },
+  );
+  assert.ok(
+    broad.searchObjective > narrow.searchObjective,
+    `losing 20 abilities scored no worse: ${narrow.searchObjective} vs ${broad.searchObjective}`,
+  );
+});
+
+test("v4: the coverage floor is OFF by default, because it must be measured", () => {
+  // ⚠️ Deliberately the opposite default from the balance floor. A coverage
+  // count only means something next to the tier that produced it, so a
+  // transplanted number would reject every candidate INCLUDING the incumbent —
+  // the same failure that made BALANCE_V3_FLOOR a reference rather than a
+  // threshold. `search/run.ts` calibrates it from the baseline it evaluates.
+  assert.equal(DEFAULT_USAGE_TARGETS.coverageFloor, 0);
+
+  const narrow = scoreFitness(
+    syntheticEvaluation({
+      id: "unguarded", duelImbalance: 0.1, ffa4Imbalance: 0.1, ffa7Imbalance: 0.1,
+      usage: healthyUsage({ abilitiesUsed: 10 }),
+    }),
+  );
+  assert.ok(
+    !narrow.violations.some((v) => v.kind === "coverageRegression"),
+    "an uncalibrated floor must not fire",
+  );
+});

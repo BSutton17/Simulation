@@ -114,6 +114,7 @@ export const FOX_SWIPE: AbilityDefinition = {
   name: "Fox Swipe",
   kind: "attack",
   cost: 66,
+  unlockCost: 33,
   cooldownTicks: Math.round(3.7 * TICK.RATE), // 3.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -145,6 +146,7 @@ export const FOX_FIRE: AbilityDefinition = {
   name: "Fox Fire",
   kind: "attack",
   cost: 373,
+  unlockCost: 187,
   cooldownTicks: Math.round(8.8 * TICK.RATE), // 13.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -181,6 +183,7 @@ export const OLD_FRIENDS: AbilityDefinition = {
   name: "Old Friends",
   kind: "attack",
   cost: 282,
+  unlockCost: 141,
   cooldownTicks: Math.round(31.25 * TICK.RATE), // 43.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -220,6 +223,7 @@ export const AZURE_GUIDANCE: AbilityDefinition = {
   name: "Azure Guidance",
   kind: "utility",
   cost: 164,
+  unlockCost: 82,
   cooldownTicks: Math.round(40.95 * TICK.RATE), // 30.25 s
   targeting: { mode: "self" },
   effects: [

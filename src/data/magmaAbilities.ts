@@ -54,6 +54,7 @@ export const LAVA_PUNCH: AbilityDefinition = {
   name: "Lava Punch",
   kind: "attack",
   cost: 140,
+  unlockCost: 70,
   cooldownTicks: Math.round(4.9 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -86,6 +87,7 @@ export const ERUPTION: AbilityDefinition = {
   name: "Eruption",
   kind: "attack",
   cost: 278,
+  unlockCost: 139,
   cooldownTicks: Math.round(6.45 * TICK.RATE), // 10.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -152,6 +154,7 @@ export const FLOOR_IS_LAVA: AbilityDefinition = {
   name: "Floor is Lava",
   kind: "utility",
   cost: 195,
+  unlockCost: 98,
   cooldownTicks: Math.round(46.5 * TICK.RATE), // 33.25 s
   targeting: { mode: "self" },
   effects: [
@@ -218,6 +221,7 @@ export const THE_END_OF_THE_WORLD: AbilityDefinition = {
   name: "The End of the World",
   kind: "ultimate",
   cost: 1255,
+  unlockCost: 628,
   cooldownTicks: Math.round(55.65 * TICK.RATE), // 92.75 s
   targeting: { mode: "self" },
   effects: [
@@ -256,6 +260,7 @@ export const SMOKE_SCREEN: AbilityDefinition = {
   name: "Smoke Screen",
   kind: "utility",
   cost: 108,
+  unlockCost: 54,
   cooldownTicks: Math.round(25.1 * TICK.RATE), // 26 s
   targeting: { mode: "self" },
   effects: [

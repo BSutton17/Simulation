@@ -23,6 +23,7 @@ export const ZAP: AbilityDefinition = {
   name: "Zap",
   kind: "attack",
   cost: 53,
+  unlockCost: 27,
   cooldownTicks: Math.round(3 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -170,6 +171,7 @@ export const THUNDERDOME: AbilityDefinition = {
   name: "Thunderdome",
   kind: "attack",
   cost: 418,
+  unlockCost: 209,
   cooldownTicks: Math.round(12.8 * TICK.RATE), // 21 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -224,6 +226,7 @@ export const HACK: AbilityDefinition = {
   name: "Hack",
   kind: "utility",
   cost: 332,
+  unlockCost: 166,
   cooldownTicks: Math.round(52.85 * TICK.RATE), // 61.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -282,6 +285,7 @@ export const THUNDERING_FATE: AbilityDefinition = {
   name: "Thundering Fate",
   kind: "ultimate",
   cost: 1052,
+  unlockCost: 526,
   cooldownTicks: Math.round(151.2 * TICK.RATE), // 252 s
   targeting: { mode: "self" },
   effects: [

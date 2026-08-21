@@ -98,6 +98,7 @@ export const ICICLE: AbilityDefinition = {
   name: "Icicle",
   kind: "attack",
   cost: 77,
+  unlockCost: 39,
   cooldownTicks: Math.round(3.3 * TICK.RATE), // 3.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -147,6 +148,7 @@ export const FLOOD_OF_FROST: AbilityDefinition = {
   name: "Flood of Frost",
   kind: "attack",
   cost: 150,
+  unlockCost: 75,
   cooldownTicks: Math.round(6.55 * TICK.RATE), // 9.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -205,6 +207,7 @@ export const FREEZE_TO_THE_CORE: AbilityDefinition = {
   name: "Freeze to the Core",
   kind: "attack",
   cost: 472,
+  unlockCost: 236,
   cooldownTicks: Math.round(21 * TICK.RATE), // 15 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -266,6 +269,7 @@ export const SNOWMAN: AbilityDefinition = {
   name: "Snowman",
   kind: "utility",
   cost: 285,
+  unlockCost: 143,
   cooldownTicks: Math.round(51.7 * TICK.RATE), // 55.25 s
   targeting: { mode: "self" },
   effects: [
@@ -301,6 +305,7 @@ export const BLIZZARD: AbilityDefinition = {
   name: "Blizzard",
   kind: "ultimate",
   cost: 300,
+  unlockCost: 150,
   cooldownTicks: Math.round(94.65 * TICK.RATE), // 90.25 s
   targeting: { mode: "allEnemies" },
   effects: [

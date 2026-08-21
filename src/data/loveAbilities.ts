@@ -31,6 +31,7 @@ export const TOUGH_LOVE: AbilityDefinition = {
   name: "Tough Love",
   kind: "attack",
   cost: 68,
+  unlockCost: 34,
   cooldownTicks: Math.round(2.45 * TICK.RATE), // 1.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -73,6 +74,7 @@ export const CUPIDS_ARROW: AbilityDefinition = {
   name: "Cupid's Arrow",
   kind: "attack",
   cost: 336,
+  unlockCost: 168,
   cooldownTicks: Math.round(7.7 * TICK.RATE), // 7.5 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -122,6 +124,7 @@ export const BFFS: AbilityDefinition = {
   name: "BFFS!!!",
   kind: "attack",
   cost: 400,
+  unlockCost: 200,
   cooldownTicks: 14 * TICK.RATE, // 14 s
   targeting: { mode: "singleEnemy", secondTarget: true },
   effects: [
@@ -167,6 +170,7 @@ export const EMPATHY: AbilityDefinition = {
   name: "Have some Empathy!",
   kind: "utility",
   cost: 200,
+  unlockCost: 100,
   cooldownTicks: 20 * TICK.RATE, // 20 s
   targeting: { mode: "self" },
   effects: [
@@ -214,6 +218,7 @@ export const LOVE_GALORE: AbilityDefinition = {
   name: "Love Galore",
   kind: "ultimate",
   cost: 800,
+  unlockCost: 400,
   cooldownTicks: 180 * TICK.RATE, // 180 s
   targeting: { mode: "self" },
   effects: [

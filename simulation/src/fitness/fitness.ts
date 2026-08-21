@@ -141,6 +141,21 @@ export interface UsageTargets {
    */
   balanceFloor: number;
   /**
+   * Distinct abilities a candidate must still get cast, or it is a regression.
+   *
+   * ⚠️ THE BALANCE FLOOR WAS ONLY HALF THE GUARD, and the missing half cost a
+   * whole campaign. Balance was protected from being traded for usage; usage was
+   * protected from nothing. Usage is a RESERVED SHARE worth at most ~0.105 of
+   * the objective while balance swings 0.3+, so any candidate that could buy
+   * fairness by pricing an ability out of reach did exactly that — and forty
+   * generations ended at 62/80 having started at 64/80.
+   *
+   * Symmetry fixes it: below this many distinct abilities a violation fires,
+   * gets penalised, and caps the score, exactly as a balance regression does.
+   * 0 disables the floor.
+   */
+  coverageFloor: number;
+  /**
    * Ceiling on the usage bonus, as a share of the final objective.
    *
    * Small on purpose. Large enough to break ties and to pay for reaching a dead
@@ -182,6 +197,9 @@ export const DEFAULT_USAGE_TARGETS: UsageTargets = {
   // without demanding they be spammed.
   shieldsPerMatch: 2,
   balanceFloor: BALANCE_V3_FLOOR,
+  // Calibrated from the run's own baseline by `search/run.ts`, like the balance
+  // floor. A transplanted count would mean nothing across different tiers.
+  coverageFloor: 0,
   weight: 0.15,
 };
 
@@ -645,6 +663,22 @@ export function scoreFitness(
       detail:
         `balance ${balanceAfterPenalty.toFixed(4)} (after penalties) is below the floor ` +
         `${targets.balanceFloor.toFixed(4)} — usage must not be bought with fairness`,
+    });
+  }
+
+  // The other half of the same guard. A candidate may improve balance all it
+  // likes; it may not do so by removing abilities from the game.
+  if (targets.coverageFloor > 0 && result.usage.abilitiesUsed < targets.coverageFloor) {
+    violations.push({
+      format: "overall",
+      kind: "coverageRegression",
+      subject: "usage",
+      observed: result.usage.abilitiesUsed,
+      threshold: targets.coverageFloor,
+      detail:
+        `only ${result.usage.abilitiesUsed} distinct abilities were cast, below the ` +
+        `floor of ${targets.coverageFloor} — fairness must not be bought by ` +
+        `pricing abilities out of the game`,
     });
   }
 

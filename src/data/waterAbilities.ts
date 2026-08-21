@@ -47,6 +47,7 @@ export const WATER_BALL: AbilityDefinition = {
   name: "Water Ball",
   kind: "attack",
   cost: 147,
+  unlockCost: 74,
   cooldownTicks: Math.round(2.25 * TICK.RATE), // 3.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -88,6 +89,7 @@ export const WATERFALL: AbilityDefinition = {
   name: "Waterfall",
   kind: "attack",
   cost: 274,
+  unlockCost: 137,
   cooldownTicks: Math.round(6.05 * TICK.RATE), // 8.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -146,6 +148,7 @@ export const FLOOD: AbilityDefinition = {
   name: "Flood",
   kind: "attack",
   cost: 189,
+  unlockCost: 95,
   cooldownTicks: Math.round(29.75 * TICK.RATE), // 21.25 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -226,6 +229,7 @@ export const FLUID_ASSIMILATION: AbilityDefinition = {
   name: "Fluid Assimilation",
   kind: "utility",
   cost: 246,
+  unlockCost: 123,
   cooldownTicks: Math.round(20.85 * TICK.RATE), // 34.75 s
   targeting: { mode: "allEnemies" },
   effects: [
@@ -260,6 +264,7 @@ export const RIPTIDE: AbilityDefinition = {
   name: "Riptide",
   kind: "ultimate",
   cost: 1345,
+  unlockCost: 673,
   cooldownTicks: Math.round(231.65 * TICK.RATE), // 192 s
   targeting: { mode: "self" },
   effects: [

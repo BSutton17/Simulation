@@ -52,6 +52,7 @@ export const SHADOW_STRIKE: AbilityDefinition = {
   name: "Shadow Strike",
   kind: "attack",
   cost: 71,
+  unlockCost: 36,
   cooldownTicks: Math.round(5.25 * TICK.RATE), // 3.75 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -100,6 +101,7 @@ export const YIN_AND_YANG: AbilityDefinition = {
   name: "Yin and Yang",
   kind: "attack",
   cost: 300,
+  unlockCost: 150,
   cooldownTicks: 18 * TICK.RATE, // 18 s
   targeting: { mode: "singleEnemy", choices: ["yin", "yang"] },
   effects: [
@@ -153,6 +155,7 @@ export const UNLIMITED_RAGE: AbilityDefinition = {
   name: "Unlimited Rage",
   kind: "attack",
   cost: 600,
+  unlockCost: 300,
   cooldownTicks: 60 * TICK.RATE, // 60 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -211,6 +214,7 @@ export const NEVER_ENDING_NIGHTMARE: AbilityDefinition = {
   name: "Never-ending Nightmare",
   kind: "utility",
   cost: 250,
+  unlockCost: 125,
   cooldownTicks: 30 * TICK.RATE, // 30 s
   targeting: { mode: "singleEnemy" },
   effects: [
@@ -275,6 +279,7 @@ export const INFINITUM_TENEBRAE: AbilityDefinition = {
   name: "Infinitum Tenebrae",
   kind: "ultimate",
   cost: 498,
+  unlockCost: 249,
   cooldownTicks: Math.round(154.35 * TICK.RATE), // 110.25 s
   targeting: { mode: "self" },
   effects: [

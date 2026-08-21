@@ -203,7 +203,7 @@ export const THUNDERDOME: AbilityDefinition = {
       level: 3,
       cost: 400,
       changes: {
-        cooldownTicks: Math.round(15 * TICK.RATE * 0.9), // 270 ticks (13.5 s)
+        cooldownTicks: 165, // 270 ticks (13.5 s)
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },

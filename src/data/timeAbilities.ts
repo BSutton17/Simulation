@@ -39,7 +39,7 @@ export const TIK_TOK: AbilityDefinition = {
     {
       level: 1,
       cost: 150,
-      changes: { effectParams: [{ amount: 205 }] },
+      changes: { effectParams: [{ amount: 287 }] },
     },
     {
       level: 2,
@@ -52,7 +52,7 @@ export const TIK_TOK: AbilityDefinition = {
     {
       level: 3,
       cost: 400,
-      changes: { effectParams: [{ amount: 270 }] },
+      changes: { effectParams: [{ amount: 378 }] },
     },
   ],
 };
@@ -105,7 +105,7 @@ export const HALF_PASSED_12: AbilityDefinition = {
       level: 3,
       cost: 400,
       changes: {
-        cooldownTicks: Math.round(20 * TICK.RATE * 0.9),
+        cooldownTicks: 216,
         costMultiplier: 0.85,
       },
     },
@@ -168,7 +168,7 @@ export const FATHER_TIME: AbilityDefinition = {
       level: 3,
       cost: 500,
       changes: {
-        cooldownTicks: Math.round(20 * TICK.RATE * 0.9),
+        cooldownTicks: 216,
         costMultiplier: 0.85,
       },
     },
@@ -200,7 +200,7 @@ export const BLIP: AbilityDefinition = {
       level: 1,
       cost: 300,
       changes: {
-        cooldownTicks: Math.round(15 * TICK.RATE * 0.85), // 12.75 s
+        cooldownTicks: 97, // 12.75 s
         costMultiplier: 0.85,
       },
     },
@@ -208,7 +208,7 @@ export const BLIP: AbilityDefinition = {
       level: 2,
       cost: 400,
       changes: {
-        cooldownTicks: Math.round(15 * TICK.RATE * 0.7), // 10.5 s
+        cooldownTicks: 80, // 10.5 s
         costMultiplier: 0.85,
       },
     },

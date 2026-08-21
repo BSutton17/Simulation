@@ -41,13 +41,41 @@ if (!candidatePath) {
   process.exit(1);
 }
 
-const raw = JSON.parse(readFileSync(candidatePath, "utf8")) as
+type CandidateFile =
   | ParameterSet
-  | { parameters: ParameterSet };
-const candidate: ParameterSet =
-  "parameters" in raw && typeof raw.parameters === "object"
-    ? (raw as { parameters: ParameterSet }).parameters
-    : (raw as ParameterSet);
+  | { parameters: ParameterSet }
+  | Array<{ parameters: ParameterSet }>;
+
+/**
+ * Unwraps whichever shape the candidate arrived in.
+ *
+ * ⚠️ THE ARRAY FORM IS THE COORDINATOR'S OWN. It reports a generation as a LIST
+ * of candidates, so a pasted `[{ parameters: … }]` is the most likely input of
+ * the three. Reading it as a bare parameter map yields exactly one "parameter"
+ * called "0" and a comparison of the baseline against itself — which the
+ * completeness check below does catch, but only after evaluating the whole
+ * baseline tier first.
+ */
+function unwrap(raw: CandidateFile): ParameterSet {
+  if (Array.isArray(raw)) {
+    const first = raw[0];
+    if (!first || typeof first !== "object" || !("parameters" in first)) {
+      throw new Error("candidate array is empty or its entries carry no `parameters`");
+    }
+    if (raw.length > 1) {
+      console.log(`note: file holds ${raw.length} candidates; comparing the first
+`);
+    }
+    return first.parameters;
+  }
+  if ("parameters" in raw && typeof raw.parameters === "object") {
+    return (raw as { parameters: ParameterSet }).parameters;
+  }
+  return raw as ParameterSet;
+}
+
+const raw = JSON.parse(readFileSync(candidatePath, "utf8")) as CandidateFile;
+const candidate: ParameterSet = unwrap(raw);
 
 // ---------------------------------------------------------------------------
 // 0. Completeness. A partial set silently leaves the rest of the game on

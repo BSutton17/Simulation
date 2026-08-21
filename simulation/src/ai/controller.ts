@@ -10,7 +10,14 @@ import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
 import type { PlayerState } from "../../../src/match/playerState.js";
 import type { AIContext, AIController, AIFactory } from "../types.js";
 import type { Rng } from "../rng.js";
-import { ACTION_SIZE, PRIMARY_ACTION_COUNT, WAIT, orderEnemies } from "./actions.js";
+import {
+  ACTION_SIZE,
+  CAST_BASE,
+  KIT_SLOTS,
+  PRIMARY_ACTION_COUNT,
+  WAIT,
+  orderEnemies,
+} from "./actions.js";
 import { chargesToSpend, decide, type Decision } from "./decode.js";
 import { DEFAULT_DECISION_PERIOD, DIFFICULTY, type Difficulty } from "./difficulty.js";
 import { ObservedHistory, knowledgeFor } from "./knowledge.js";
@@ -78,6 +85,22 @@ export interface ControllerStats {
   distinctActions: number;
   /** Summed legal actions over all decisions, for the choice-per-decision rate. */
   legalOffered: number;
+  /**
+   * Per kit slot: decisions on which casting it was LEGAL, and on which it was
+   * actually CHOSEN.
+   *
+   * ⚠️ THE TWO NUMBERS ANSWER DIFFERENT QUESTIONS, and only together do they
+   * say whether balance can fix a dead ability. An ability that is never legal
+   * is out of reach — unaffordable, gated behind a meter or a status — and no
+   * amount of retuning its damage will make it appear. One that is legal all
+   * match and never chosen is being REJECTED on value, which is exactly what a
+   * price or a damage figure controls.
+   *
+   * Fourteen of eighty abilities are never cast. Which of those two groups they
+   * fall into decides whether a balance search can reach 80/80 at all.
+   */
+  castLegal: number[];
+  castChosen: number[];
 }
 
 export class NetworkController implements AIController {
@@ -103,6 +126,8 @@ export class NetworkController implements AIController {
     decisions: 0, casts: 0, invests: 0, citizens: 0, repairs: 0,
     shields: 0, retargets: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
     actionSwitches: 0, distinctActions: 0, legalOffered: 0,
+    castLegal: new Array<number>(KIT_SLOTS).fill(0),
+    castChosen: new Array<number>(KIT_SLOTS).fill(0),
   };
 
   /** Diagnostics only: what was chosen last, and everything chosen so far. */
@@ -157,6 +182,9 @@ export class NetworkController implements AIController {
     for (let i = 0; i < PRIMARY_ACTION_COUNT; i++) {
       if (this.mask[i] === 1) this.stats.legalOffered += 1;
     }
+    for (let slot = 0; slot < KIT_SLOTS; slot++) {
+      if (this.mask[CAST_BASE + slot] === 1) this.stats.castLegal[slot]! += 1;
+    }
 
     let decision = decide(this.out, this.mask, {
       temperature: this.temperature,
@@ -168,6 +196,12 @@ export class NetworkController implements AIController {
     this.stats.decisions += 1;
     if (this.previousAction >= 0 && decision.primaryIndex !== this.previousAction) {
       this.stats.actionSwitches += 1;
+    }
+    if (
+      decision.primaryIndex >= CAST_BASE &&
+      decision.primaryIndex < CAST_BASE + KIT_SLOTS
+    ) {
+      this.stats.castChosen[decision.primaryIndex - CAST_BASE]! += 1;
     }
     this.previousAction = decision.primaryIndex;
     this.actionsSeen.add(decision.primaryIndex);

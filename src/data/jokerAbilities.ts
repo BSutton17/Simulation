@@ -67,7 +67,7 @@ export const ACE_OF_SPADES: AbilityDefinition = {
       level: 2,
       cost: 250,
       changes: {
-        cooldownTicks: Math.round(3 * TICK.RATE * 0.9),
+        cooldownTicks: 33,
         costMultiplier: 0.85,
       },
     },
@@ -178,7 +178,7 @@ export const BLACKJACK: AbilityDefinition = {
       level: 2,
       cost: 350,
       changes: {
-        cooldownTicks: Math.round(8 * TICK.RATE * 0.9),
+        cooldownTicks: 86,
         costMultiplier: 0.85,
       },
     },
@@ -346,7 +346,7 @@ export const SLOT_MACHINE: AbilityDefinition = {
       level: 2,
       cost: 1600,
       changes: {
-        cooldownTicks: Math.round(120 * TICK.RATE * 0.85),
+        cooldownTicks: 1004,
         costMultiplier: 0.85,
       },
     },

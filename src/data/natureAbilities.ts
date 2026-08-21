@@ -145,7 +145,7 @@ export const SLUDGE: AbilityDefinition = {
       level: 2,
       cost: 250,
       changes: {
-        cooldownTicks: Math.round(3 * TICK.RATE * 0.9), // 54 ticks (2.7 s)
+        cooldownTicks: 33, // 54 ticks (2.7 s)
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },
@@ -198,7 +198,7 @@ export const ACID_RAIN: AbilityDefinition = {
       level: 3,
       cost: 400,
       changes: {
-        cooldownTicks: Math.round(10 * TICK.RATE * 0.9), // 9 s
+        cooldownTicks: 108, // 9 s
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },
@@ -300,7 +300,7 @@ export const POISON_APPLE: AbilityDefinition = {
       level: 2,
       cost: 400,
       changes: {
-        cooldownTicks: Math.round(25 * TICK.RATE * 0.85), // 425 ticks (21.25 s)
+        cooldownTicks: 277, // 425 ticks (21.25 s)
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },

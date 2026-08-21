@@ -160,7 +160,7 @@ export const BUTTERFLIES: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 300, changes: { effectParams: [{ amount: 700 }] } },
+    { level: 1, cost: 300, changes: { effectParams: [{ amount: 909 }] } },
     {
       level: 2,
       cost: 400,
@@ -209,7 +209,7 @@ export const INFECTED: AbilityDefinition = {
       level: 2,
       cost: 600,
       changes: {
-        cooldownTicks: Math.round(24 * TICK.RATE * 0.85),
+        cooldownTicks: 189,
         costMultiplier: 0.85,
       },
     },
@@ -302,7 +302,7 @@ export const CAPRICE: AbilityDefinition = {
       level: 2,
       cost: 1600,
       changes: {
-        cooldownTicks: Math.round(120 * TICK.RATE * 0.85),
+        cooldownTicks: 1224,
         costMultiplier: 0.85,
       },
     },

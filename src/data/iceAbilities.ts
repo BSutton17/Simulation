@@ -185,7 +185,7 @@ export const FLOOD_OF_FROST: AbilityDefinition = {
       level: 3,
       cost: 450,
       changes: {
-        cooldownTicks: Math.round(10 * TICK.RATE * 0.9), // 9 s
+        cooldownTicks: 127, // 9 s
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },

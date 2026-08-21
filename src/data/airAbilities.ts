@@ -101,7 +101,7 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
       level: 1,
       cost: 150,
       changes: {
-        effectParams: [{ amount: 205 }],
+        effectParams: [{ amount: 287 }],
       },
     },
     {
@@ -116,7 +116,7 @@ export const A_LIGHT_BREEZE: AbilityDefinition = {
       level: 3,
       cost: 400,
       changes: {
-        effectParams: [{ amount: 240 }],
+        effectParams: [{ amount: 336 }],
       },
     },
   ],
@@ -148,7 +148,7 @@ export const HURRICANE: AbilityDefinition = {
       level: 1,
       cost: 200,
       changes: {
-        effectParams: [{ amount: 500 }],
+        effectParams: [{ amount: 700 }],
       },
     },
     {
@@ -205,7 +205,7 @@ export const THICK_FOG: AbilityDefinition = {
       level: 1,
       cost: 250,
       changes: {
-        effectParams: [{ amount: 575 }],
+        effectParams: [{ amount: 805 }],
       },
     },
     {
@@ -297,7 +297,7 @@ export const DUST_BUNNIES: AbilityDefinition = {
       level: 2,
       cost: 1500,
       changes: {
-        cooldownTicks: Math.round(90 * TICK.RATE * 0.85), // 1530 ticks (76.5 s)
+        cooldownTicks: 1064, // 1530 ticks (76.5 s)
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },

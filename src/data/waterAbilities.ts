@@ -68,7 +68,7 @@ export const WATER_BALL: AbilityDefinition = {
       level: 2,
       cost: 250,
       changes: {
-        cooldownTicks: Math.round(3 * TICK.RATE * 0.9), // 54 ticks (2.7 s)
+        cooldownTicks: 32, // 54 ticks (2.7 s)
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },
@@ -121,7 +121,7 @@ export const WATERFALL: AbilityDefinition = {
       level: 3,
       cost: 350,
       changes: {
-        cooldownTicks: Math.round(10 * TICK.RATE * 0.9), // 9 s
+        cooldownTicks: 109, // 9 s
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },
@@ -172,7 +172,7 @@ export const FLOOD: AbilityDefinition = {
       level: 1,
       cost: 250,
       changes: {
-        effectParams: [{ amount: 665 }],
+        effectParams: [{ amount: 931 }],
       },
     },
     {

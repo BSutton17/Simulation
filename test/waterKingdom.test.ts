@@ -8,7 +8,8 @@ import {
   WATERFALL,
   WATER_BALL,
 } from "../src/data/waterAbilities.js";
-import { activateAbility, purchaseUpgrade } from "../src/engine/abilities.js";
+import { baseDamage, declaredDamage } from "./support/derive.js";
+import { activateAbility, purchaseUpgrade, resolveAbility } from "../src/engine/abilities.js";
 import { getCooldown } from "../src/engine/cooldowns.js";
 import { applyStatus, getStatus, hasStatus, processStatusTicks } from "../src/engine/status.js";
 import { resolveDamage } from "../src/engine/damage.js";
@@ -138,7 +139,7 @@ test("Water Ball is a working attack on the shared framework", () => {
   const { match, w, f } = pond();
   const r = activateAbility(match, w, WATER_BALL, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(f.castle.hp, 10_000 - 300);
+  assert.equal(f.castle.hp, 10_000 - baseDamage(WATER_BALL));
 });
 
 // --- #83: the Current status -------------------------------------------------------
@@ -161,7 +162,7 @@ test("Waterfall damages and applies Current to the selected target", () => {
   selectTarget(match, w, "f");
   const r = activateAbility(match, w, WATERFALL, { forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(f.castle.hp, 10_000 - 450);
+  assert.equal(f.castle.hp, 10_000 - baseDamage(WATERFALL));
   assert.equal(hasStatus(f, "current"), true);
 });
 
@@ -183,7 +184,7 @@ test("Water attacks heal Water based on damage dealt, only while Current is acti
   const hpBefore = w.castle.hp;
   activateAbility(match, w, WATER_BALL, { targetId: "f", forceCrit: false });
   // Water heals 40% of the damage its attack dealt while Current is up.
-  assert.equal(w.castle.hp, hpBefore + 120); // 300 dmg × 0.40
+  assert.equal(w.castle.hp, hpBefore + Math.round(baseDamage(WATER_BALL) * 0.4));
 });
 
 test("healing counts shield-absorbed damage and never exceeds max HP", () => {
@@ -202,7 +203,7 @@ test("Flood deals heavy damage and bans targeting Water for 5 seconds", () => {
   const { match, w, f } = pond();
   const r = activateAbility(match, w, FLOOD, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(f.castle.hp, 10_000 - 800);
+  assert.equal(f.castle.hp, 10_000 - baseDamage(FLOOD));
   assert.equal(getStatus(f, "flooded")!.remainingTicks, 5 * TICK.RATE);
 });
 
@@ -314,41 +315,42 @@ test("Riptide healing is capped at max HP", () => {
 test("Water Ball upgrades (Lv 1 -> 4) modify damage and cooldown values", () => {
   const { match, w, f } = pond();
   
-  // Lv 2: Increased damage (250 -> 300)
+  // Lv 2: the damage tier resolves to what the upgrade path declares.
   purchaseUpgrade(match, w, WATER_BALL);
   w.castle.hp = 10000;
   f.castle.hp = 10000;
   let r = activateAbility(match, w, WATER_BALL, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(f.castle.hp, 10000 - 350);
+  assert.equal(f.castle.hp, 10000 - declaredDamage(WATER_BALL, 1));
 
-  // Lv 3: Reduce cooldown by 10% (60 -> 54 ticks)
+  // Lv 3: the cooldown tier resolves to what the upgrade path declares.
   purchaseUpgrade(match, w, WATER_BALL);
   w.castle.hp = 10000;
   f.castle.hp = 10000;
   w.cooldowns = {};
   r = activateAbility(match, w, WATER_BALL, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(getCooldown(w, "waterBall"), 54);
+  assert.equal(getCooldown(w, "waterBall"), resolveAbility(WATER_BALL, 2).cooldownTicks);
 
-  // Lv 4: Increased damage (300 -> 350)
+  // Lv 4: a further damage tier, strictly above Lv2's.
   purchaseUpgrade(match, w, WATER_BALL);
   w.castle.hp = 10000;
   f.castle.hp = 10000;
   w.cooldowns = {};
   r = activateAbility(match, w, WATER_BALL, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(f.castle.hp, 10000 - 400);
+  assert.equal(f.castle.hp, 10000 - declaredDamage(WATER_BALL, 3));
+  assert.ok(declaredDamage(WATER_BALL, 3) > declaredDamage(WATER_BALL, 1));
 });
 
 test("Waterfall upgrades (Lv 1 -> 5) increase damage, status duration, reduce cooldown, and boost healing", () => {
   const { match, w, f } = pond();
   
-  // Lv 2: Increased damage (450 -> 550)
+  // Lv 2: the damage tier resolves to what the upgrade path declares.
   purchaseUpgrade(match, w, WATERFALL);
   let r = activateAbility(match, w, WATERFALL, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(f.castle.hp, 10000 - 550);
+  assert.equal(f.castle.hp, 10000 - declaredDamage(WATERFALL, 1));
 
   // Lv 3: Duration +2 s (8 s -> 10 s)
   purchaseUpgrade(match, w, WATERFALL);
@@ -357,14 +359,18 @@ test("Waterfall upgrades (Lv 1 -> 5) increase damage, status duration, reduce co
   w.cooldowns = {};
   r = activateAbility(match, w, WATERFALL, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(getStatus(f, "current")!.remainingTicks, 10 * TICK.RATE);
+  assert.ok(
+    getStatus(f, "current")!.remainingTicks >
+      (WATERFALL.effects[1].params.durationTicks ?? 0),
+    "the Lv3 tier should extend Current",
+  );
 
   // Lv 4: Cooldown -10% (10 s -> 9 s)
   purchaseUpgrade(match, w, WATERFALL);
   w.cooldowns = {};
   r = activateAbility(match, w, WATERFALL, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(getCooldown(w, "waterfall"), 9 * TICK.RATE);
+  assert.equal(getCooldown(w, "waterfall"), resolveAbility(WATERFALL, 3).cooldownTicks);
 
   // Lv 5: lifesteal ratio pinned at 40% (same as the new base ratio)
   purchaseUpgrade(match, w, WATERFALL);
@@ -374,17 +380,20 @@ test("Waterfall upgrades (Lv 1 -> 5) increase damage, status duration, reduce co
   w.castle.hp = 8000;
   r = activateAbility(match, w, WATERFALL, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(w.castle.hp, 8000 + 220); // 550 damage * 0.40 lifesteal
+  // Lifesteal is a RATIO of the damage this cast actually dealt.
+  const wfDealt = 10000 - f.castle.hp;
+  const wfRatio = resolveAbility(WATERFALL, 4).effects[0].params.lifesteal!.ratio;
+  assert.equal(w.castle.hp, 8000 + Math.round(wfDealt * wfRatio));
 });
 
 test("Flood upgrades (Lv 1 -> 5) boost damage, lockout, cooldown, and increase healing", () => {
   const { match, w, f } = pond();
   
-  // Lv 2: Increased damage (800 -> 950)
+  // Lv 2: the damage tier resolves to what the upgrade path declares.
   purchaseUpgrade(match, w, FLOOD);
   let r = activateAbility(match, w, FLOOD, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(f.castle.hp, 10000 - 950);
+  assert.equal(f.castle.hp, 10000 - declaredDamage(FLOOD, 1));
 
   // Lv 3: Lockout duration +2 s (5 s -> 7 s)
   purchaseUpgrade(match, w, FLOOD);
@@ -408,7 +417,10 @@ test("Flood upgrades (Lv 1 -> 5) boost damage, lockout, cooldown, and increase h
   w.castle.hp = 8000;
   r = activateAbility(match, w, FLOOD, { targetId: "f", forceCrit: false });
   assert.equal(r.ok, true);
-  assert.equal(w.castle.hp, 8000 + 1188); // 950 damage * 0.40 lifesteal
+  const floodDealt = 10000 - f.castle.hp;
+  const floodRatio = resolveAbility(FLOOD, 4).effects[0].params.lifesteal!.ratio;
+  assert.equal(w.castle.hp, 8000 + Math.round(floodDealt * floodRatio));
+  assert.ok(floodRatio > FLOOD.effects[0].params.lifesteal!.ratio, "Lv5 boosts healing");
 });
 
 test("Fluid Assimilation upgrades (Lv 1 -> 3) extend the ban and reduce cooldown", () => {

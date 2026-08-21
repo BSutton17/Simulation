@@ -122,7 +122,7 @@ export const FOX_SWIPE: AbilityDefinition = {
     { type: "chargeMemory", target: "self", params: { memoryCharge: FOX_SWIPE_MEMORY } },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 290 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 402 }] } },
     {
       level: 2,
       cost: 250,
@@ -131,7 +131,7 @@ export const FOX_SWIPE: AbilityDefinition = {
         costMultiplier: 0.85,
       },
     },
-    { level: 3, cost: 400, changes: { effectParams: [{ amount: 385 }] } },
+    { level: 3, cost: 400, changes: { effectParams: [{ amount: 534 }] } },
   ],
 };
 
@@ -162,7 +162,7 @@ export const FOX_FIRE: AbilityDefinition = {
       level: 2,
       cost: 300,
       changes: {
-        cooldownTicks: Math.round(10 * TICK.RATE * 0.9),
+        cooldownTicks: 120,
         costMultiplier: 0.85,
       },
     },

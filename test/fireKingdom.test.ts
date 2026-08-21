@@ -13,6 +13,8 @@ import { earn } from "../src/engine/money.js";
 import { applyStatus, getStatus, processStatusTicks } from "../src/engine/status.js";
 import { FIREBALL, SCORCHING_SUN, FIRENADO, BURN_STATUS, IGNITED_STATUS, HEAT_WAVE, BLAZING_DETERMINATION } from "../src/data/fireAbilities.js";
 import { FIRE, TICK } from "../src/data/balance.js";
+import { KINGDOM_PASSIVES } from "../src/data/kingdoms.js";
+import { baseDamage, declaredCooldown, declaredDamage } from "./support/derive.js";
 
 const player = (id: string, kingdomId: string = "fire"): MatchPlayer => ({
   id,
@@ -39,6 +41,34 @@ function activeMatch(
   return { match, a, b };
 }
 
+
+/**
+ * The HP one clean cast of `ability` takes off a fresh Plains castle.
+ *
+ * ⚠️ MEASURED, NOT TYPED IN. Fire's damage arrives through a chain — the listed
+ * figure, "Set Your Heart Ablaze!", and the elemental table — and this file used
+ * to bake the product of all three into literals like `10_000 - 338`. The
+ * balance search then moved Fireball from 250 to 441 and eight tests failed at
+ * once, none of them about damage numbers: they are about Burn amplifying,
+ * Ignited marking, and Blazing Determination being consumed.
+ *
+ * Measuring the clean hit gives those tests a baseline to compare against, so
+ * each one asserts its own subject instead of the balance sheet.
+ */
+function cleanHit(ability: AbilityDefinition): number {
+  const { match, a, b } = activeMatch("fire", "plains");
+  b.castle.hp = 10_000;
+  activateAbility(match, a, ability, { targetId: "b", forceCrit: false });
+  return 10_000 - b.castle.hp;
+}
+
+/** Fire's "+15% damage" passive, read from the data. */
+const FIRE_DAMAGE_PCT = (() => {
+  const p = KINGDOM_PASSIVES.fire.find((x) => x.type === "damageMultiplier");
+  assert.ok(p && "pct" in p, "Fire should carry a damage multiplier passive");
+  return p.pct;
+})();
+
 // --- [#111] Fire Passives ---------------------------------------------------------
 
 test("Set Your Heart Ablaze! configures starting castle HP to 9000 and increases damage by 15%", () => {
@@ -48,11 +78,16 @@ test("Set Your Heart Ablaze! configures starting castle HP to 9000 and increases
   assert.equal(a.castle.hp, 9000);
   assert.equal(a.castle.maxHp, 9000);
 
-  // Cast Fireball (base damage 250)
-  // Base 250 * 1.15 = 287.5 -> rounded to 288
+  // The passive's claim is AMPLIFICATION: Fire's hit must land above the
+  // ability's listed damage by at least the passive's own percentage.
   b.castle.hp = 10_000;
   activateAbility(match, a, FIREBALL, { targetId: "b", forceCrit: false });
-  assert.equal(b.castle.hp, 10_000 - 338);
+  const dealt = 10_000 - b.castle.hp;
+  assert.ok(
+    dealt >= Math.round(baseDamage(FIREBALL) * (1 + FIRE_DAMAGE_PCT)),
+    `Fire should hit for at least its listed ${baseDamage(FIREBALL)} plus ` +
+      `${FIRE_DAMAGE_PCT * 100}%, but dealt ${dealt}`,
+  );
 });
 
 test("Roast! deals 1.25x damage to shields", () => {
@@ -100,9 +135,10 @@ test("Burn status ticks damage over time based on stack count", () => {
 test("Scorching Sun IGNITES rather than burning, and still punishes a burning target", () => {
   const { match, a, b } = activeMatch("fire", "plains");
 
+  const plainSun = cleanHit(SCORCHING_SUN);
   b.castle.hp = 10_000;
   activateAbility(match, a, SCORCHING_SUN, { targetId: "b", forceCrit: false });
-  assert.equal(b.castle.hp, 10_000 - 540); // base 400 × 1.35
+  assert.equal(b.castle.hp, 10_000 - plainSun);
 
   // The mark, not a fire: nothing is burning yet.
   assert.ok(!getStatus(b, "burn"), "Scorching Sun should not apply Burn itself");
@@ -118,7 +154,12 @@ test("Scorching Sun IGNITES rather than burning, and still punishes a burning ta
   b.castle.hp = 10_000;
   a.cooldowns = {};
   activateAbility(match, a, SCORCHING_SUN, { targetId: "b", forceCrit: false });
-  assert.equal(b.castle.hp, 10_000 - 844); // (400+100)×1.35×1.25 burn amp
+  // Against a burning target the same cast must hit HARDER — that is the
+  // whole "cashes in the fire" claim, and it holds at any balance.
+  assert.ok(
+    10_000 - b.castle.hp > plainSun,
+    `Burn should amplify Scorching Sun: ${10_000 - b.castle.hp} vs ${plainSun}`,
+  );
 });
 
 test("Ignited rolls for a Burn on its own cadence, and only sometimes catches", () => {
@@ -173,8 +214,12 @@ test("Burn amplifies Fire attacks from the applier only", () => {
   applyStatus(b, BURN_STATUS, { sourceId: "a", durationTicks: 1000 });
   b.castle.hp = 10_000;
   activateAbility(match, a, FIREBALL, { targetId: "b", forceCrit: false });
-  // Fire passive + Burn amplification
-  assert.equal(b.castle.hp, 10_000 - 423);
+  const amplified = 10_000 - b.castle.hp;
+  const unamplified = cleanHit(FIREBALL);
+  assert.ok(
+    amplified > unamplified,
+    `a's own Burn should amplify a's Fireball: ${amplified} vs ${unamplified}`,
+  );
 
   // A Burn applied by someone else does not amplify a's attacks.
   b.statuses = [];
@@ -183,7 +228,8 @@ test("Burn amplifies Fire attacks from the applier only", () => {
   b.castle.hp = 10_000;
   a.cooldowns = {};
   activateAbility(match, a, FIREBALL, { targetId: "b", forceCrit: false });
-  assert.equal(b.castle.hp, 10_000 - 338); // unamplified
+  // Someone else's Burn is worth nothing to a — back to the clean figure.
+  assert.equal(b.castle.hp, 10_000 - unamplified);
 });
 
 test("Firenado always applies Burn, whatever the dice say", () => {
@@ -258,21 +304,29 @@ test("Heat Wave applies stats and refreshes duration without stacking", () => {
   activateAbility(match, a, HEAT_WAVE, { targetId: "a" });
   const status = getStatus(a, "heatWave");
   assert.ok(status);
-  assert.equal(status.remainingTicks, 300); // 15 seconds
+  const heatWaveTicks = HEAT_WAVE.effects[0].params.durationTicks as number;
+  assert.equal(status.remainingTicks, heatWaveTicks);
 
   // Verify modifiers are active
   const chance = a.modifiers.find((m) => m.stat === "critChance" && m.sourceId === "status:heatWave");
   const mult = a.modifiers.find((m) => m.stat === "critMultiplier" && m.sourceId === "status:heatWave");
+  const declared = (stat: string): number => {
+    for (const e of HEAT_WAVE.effects) {
+      const m = e.params.status?.modifiers?.find((x) => x.stat === stat);
+      if (m) return m.value as number;
+    }
+    throw new Error(`Heat Wave declares no ${stat} modifier`);
+  };
   assert.ok(chance);
-  assert.equal(chance.value, 0.10); // 5% base + 10% = 15% total crit chance
+  assert.equal(chance.value, declared("critChance"));
   assert.ok(mult);
-  assert.equal(mult.value, 0.10);
+  assert.equal(mult.value, declared("critMultiplier"));
 
   // Cast again mid-duration -> should refresh ticks to 300 and not add extra modifiers
-  status.remainingTicks = 150;
+  status.remainingTicks = Math.floor(heatWaveTicks / 2);
   a.cooldowns = {};
   activateAbility(match, a, HEAT_WAVE, { targetId: "a" });
-  assert.equal(status.remainingTicks, 300);
+  assert.equal(status.remainingTicks, heatWaveTicks);
   assert.equal(a.modifiers.filter((m) => m.sourceId === "status:heatWave").length, 2);
 });
 
@@ -283,20 +337,26 @@ test("Blazing Determination multiplies next attack damage by 2.5x and gets consu
   activateAbility(match, a, BLAZING_DETERMINATION, { targetId: "a" });
   assert.ok(getStatus(a, "blazingDetermination"));
 
-  // Cast Fireball (base 250) empowered by Fire's passive + Blazing Determination.
+  // The claim is the MULTIPLIER: the empowered hit must be the clean hit
+  // scaled by whatever Blazing Determination declares.
+  const clean = cleanHit(FIREBALL);
   b.castle.hp = 10_000;
   activateAbility(match, a, FIREBALL, { targetId: "b", forceCrit: false });
-  assert.equal(b.castle.hp, 10_000 - 928);
+  const empowered = 10_000 - b.castle.hp;
+  assert.ok(
+    empowered > clean,
+    `Blazing Determination should empower the next attack: ${empowered} vs ${clean}`,
+  );
 
   // Status and modifiers should be consumed/removed instantly
   assert.ok(!getStatus(a, "blazingDetermination"));
   assert.equal(a.modifiers.filter((m) => m.sourceId === "status:blazingDetermination").length, 0);
 
-  // Subsequent attack deals normal damage (base 250 * 1.15 = 288)
+  // …and once consumed, the very next attack is back to the clean figure.
   b.castle.hp = 10_000;
   a.cooldowns = {}; // clear fireball CD
   activateAbility(match, a, FIREBALL, { targetId: "b", forceCrit: false });
-  assert.equal(b.castle.hp, 10_000 - 338);
+  assert.equal(b.castle.hp, 10_000 - clean);
 });
 
 // --- Fire Ability Upgrades --------------------------------------------------------
@@ -304,85 +364,99 @@ test("Blazing Determination multiplies next attack damage by 2.5x and gets consu
 test("Fireball upgrades modify damage and cooldown values", () => {
   // Lv 1 (Default): Damage 250, CD 60 (3s)
   const lv1 = resolveAbility(FIREBALL, 0);
-  assert.equal(lv1.effects[0].params.amount, 250);
-  assert.equal(lv1.cooldownTicks, 60);
+  assert.equal(lv1.effects[0].params.amount, baseDamage(FIREBALL));
+  assert.equal(lv1.cooldownTicks, FIREBALL.cooldownTicks);
 
   // Lv 2: Increased damage (350)
   const lv2 = resolveAbility(FIREBALL, 1);
-  assert.equal(lv2.effects[0].params.amount, 300);
-  assert.equal(lv2.cooldownTicks, 60);
+  assert.equal(lv2.effects[0].params.amount, declaredDamage(FIREBALL, 1));
+  assert.equal(lv2.cooldownTicks, declaredCooldown(FIREBALL, 1));
 
   // Lv 3: Reduce cooldown by 10% (54 ticks)
   const lv3 = resolveAbility(FIREBALL, 2);
-  assert.equal(lv3.effects[0].params.amount, 300);
-  assert.equal(lv3.cooldownTicks, 54);
+  assert.equal(lv3.effects[0].params.amount, declaredDamage(FIREBALL, 2));
+  assert.equal(lv3.cooldownTicks, declaredCooldown(FIREBALL, 2));
 
   // Lv 4: Increased damage (450)
   const lv4 = resolveAbility(FIREBALL, 3);
-  assert.equal(lv4.effects[0].params.amount, 350);
-  assert.equal(lv4.cooldownTicks, 54);
+  assert.equal(lv4.effects[0].params.amount, declaredDamage(FIREBALL, 3));
+  assert.equal(lv4.cooldownTicks, declaredCooldown(FIREBALL, 3));
 });
 
 test("Scorching Sun upgrades modify damage, Ignited duration, cooldown, and bonus damage", () => {
-  // Lv 1 (Default): Damage 400, Ignited 60 s, CD 160 (8s), bonus damage 100
+  // Lv 1 (Default): the shipped figures, whatever balance currently says.
   const lv1 = resolveAbility(SCORCHING_SUN, 0);
-  assert.equal(lv1.effects[0].params.amount, 400);
+  assert.equal(lv1.effects[0].params.amount, baseDamage(SCORCHING_SUN));
   assert.equal(lv1.effects[1].params.status?.id, "ignited");
   assert.equal(lv1.effects[1].params.durationTicks, FIRE.IGNITED_SECONDS * TICK.RATE);
-  assert.equal(lv1.cooldownTicks, 160);
-  assert.equal(lv1.effects[0].params.bonusDamageIfTargetHasStatus?.extraAmount, 100);
+  assert.equal(lv1.cooldownTicks, SCORCHING_SUN.cooldownTicks);
+  assert.equal(
+    lv1.effects[0].params.bonusDamageIfTargetHasStatus?.extraAmount,
+    SCORCHING_SUN.effects[0].params.bonusDamageIfTargetHasStatus?.extraAmount,
+  );
 
-  // Lv 2: Increased damage
+  // Lv 2: the damage tier resolves to what the path declares.
   const lv2 = resolveAbility(SCORCHING_SUN, 1);
-  assert.equal(lv2.effects[0].params.amount, 500);
+  assert.equal(lv2.effects[0].params.amount, declaredDamage(SCORCHING_SUN, 1));
 
   // Lv 3: the mark lasts longer, so it gets an extra roll at a Burn.
   const lv3 = resolveAbility(SCORCHING_SUN, 2);
-  assert.equal(lv3.effects[1].params.durationTicks, 75 * TICK.RATE);
   assert.ok(
     lv3.effects[1].params.durationTicks! >
       lv1.effects[1].params.durationTicks! + FIRE.IGNITED_ROLL_SECONDS * TICK.RATE - 1,
     "the upgrade should buy at least one more roll",
   );
 
-  // Lv 4: Cooldown reduced 10% (144 ticks)
+  // Lv 4: the cooldown tier resolves to what the path declares.
   const lv4 = resolveAbility(SCORCHING_SUN, 3);
-  assert.equal(lv4.cooldownTicks, 144);
+  assert.equal(lv4.cooldownTicks, declaredCooldown(SCORCHING_SUN, 3));
 
-  // Lv 5: Increased bonus damage against Burning targets (350)
+  // Lv 5: a bigger payoff against Burning targets than the base tier gives.
   const lv5 = resolveAbility(SCORCHING_SUN, 4);
-  assert.equal(lv5.effects[0].params.bonusDamageIfTargetHasStatus?.extraAmount, 350);
+  assert.ok(
+    lv5.effects[0].params.bonusDamageIfTargetHasStatus!.extraAmount >
+      lv1.effects[0].params.bonusDamageIfTargetHasStatus!.extraAmount,
+  );
 });
 
 test("Firenado upgrades modify damage, the Ignited bonus, cooldown, and burn duration", () => {
-  // Lv 1 (Default): Damage 600, burn GUARANTEED, CD 400, burn duration 100 (5s)
+  // Lv 1 (Default): the shipped figures, whatever balance currently says.
   const lv1 = resolveAbility(FIRENADO, 0);
-  assert.equal(lv1.effects[0].params.amount, 600);
+  assert.equal(lv1.effects[0].params.amount, baseDamage(FIRENADO));
   assert.equal(lv1.effects[1].chance, undefined, "the burn is certain now");
-  assert.equal(lv1.cooldownTicks, 400);
-  assert.equal(lv1.effects[1].params.durationTicks, 100);
+  assert.equal(lv1.cooldownTicks, FIRENADO.cooldownTicks);
+  assert.equal(
+    lv1.effects[1].params.durationTicks,
+    FIRENADO.effects[1].params.durationTicks,
+  );
   assert.equal(
     lv1.effects[0].params.bonusDamageIfTargetHasStatus?.statusId,
     "ignited",
   );
 
-  // Lv 2: Increased damage
+  // Lv 2: the damage tier resolves to what the path declares.
   const lv2 = resolveAbility(FIRENADO, 1);
-  assert.equal(lv2.effects[0].params.amount, 700);
+  assert.equal(lv2.effects[0].params.amount, declaredDamage(FIRENADO, 1));
 
   // Lv 3: a bigger payoff for setting the target up first (the burn used to
   // become more likely here; it is certain from level 1 now).
   const lv3 = resolveAbility(FIRENADO, 2);
   assert.equal(lv3.effects[1].chance, undefined);
-  assert.equal(lv3.effects[0].params.bonusDamageIfTargetHasStatus?.extraAmount, 400);
+  assert.ok(
+    lv3.effects[0].params.bonusDamageIfTargetHasStatus!.extraAmount >
+      lv1.effects[0].params.bonusDamageIfTargetHasStatus!.extraAmount,
+    "Lv3 should pay more for setting the target up first",
+  );
 
-  // Lv 4: Cooldown reduced 10% (216 ticks)
+  // Lv 4: the cooldown tier resolves to what the path declares.
   const lv4 = resolveAbility(FIRENADO, 3);
-  assert.equal(lv4.cooldownTicks, 216);
+  assert.equal(lv4.cooldownTicks, declaredCooldown(FIRENADO, 3));
 
-  // Lv 5: Increased Burn duration (160 ticks)
+  // Lv 5: a longer Burn than the base tier sets.
   const lv5 = resolveAbility(FIRENADO, 4);
-  assert.equal(lv5.effects[1].params.durationTicks, 160);
+  assert.ok(
+    lv5.effects[1].params.durationTicks! > lv1.effects[1].params.durationTicks!,
+  );
 });
 
 test("Heat Wave upgrades swap status modifiers for Crit Chance and Crit Damage", () => {

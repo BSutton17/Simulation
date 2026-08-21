@@ -103,7 +103,7 @@ export const ERUPTION: AbilityDefinition = {
       level: 2,
       cost: 300,
       changes: {
-        cooldownTicks: Math.round(10 * TICK.RATE * 0.9),
+        cooldownTicks: 108,
         costMultiplier: 0.85,
       },
     },
@@ -238,7 +238,7 @@ export const THE_END_OF_THE_WORLD: AbilityDefinition = {
       level: 2,
       cost: 1600,
       changes: {
-        cooldownTicks: Math.round(120 * TICK.RATE * 0.85),
+        cooldownTicks: 1002,
         costMultiplier: 0.85,
       },
     },

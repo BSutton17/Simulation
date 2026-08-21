@@ -46,7 +46,7 @@ export const SHOOTING_STAR: AbilityDefinition = {
       level: 2,
       cost: 250,
       changes: {
-        cooldownTicks: Math.round(3 * TICK.RATE * 0.9), // 54 ticks (2.7 s)
+        cooldownTicks: 34, // 54 ticks (2.7 s)
         costMultiplier: 0.85,
       },
     },
@@ -126,7 +126,7 @@ export const SUPERNOVA: AbilityDefinition = {
       level: 2,
       cost: 400,
       changes: {
-        cooldownTicks: Math.round(14 * TICK.RATE * 0.9),
+        cooldownTicks: 157,
         costMultiplier: 0.85,
       },
     },
@@ -205,7 +205,7 @@ export const BLACK_HOLE: AbilityDefinition = {
       level: 2,
       cost: 1500,
       changes: {
-        cooldownTicks: Math.round(90 * TICK.RATE * 0.85), // 76.5 s
+        cooldownTicks: 681, // 76.5 s
         costMultiplier: 0.85,
       },
     },

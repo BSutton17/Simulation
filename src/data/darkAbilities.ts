@@ -58,7 +58,7 @@ export const SHADOW_STRIKE: AbilityDefinition = {
     { type: "damage", target: "target", params: { amount: 476, element: "dark" } },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 410 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 574 }] } },
     {
       level: 2,
       cost: 250,
@@ -67,7 +67,7 @@ export const SHADOW_STRIKE: AbilityDefinition = {
         costMultiplier: 0.85,
       },
     },
-    { level: 3, cost: 400, changes: { effectParams: [{ amount: 545 }] } },
+    { level: 3, cost: 400, changes: { effectParams: [{ amount: 763 }] } },
   ],
 };
 

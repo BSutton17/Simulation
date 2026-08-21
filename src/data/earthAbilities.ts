@@ -33,14 +33,14 @@ export const ROCK_THROW: AbilityDefinition = {
       level: 1,
       cost: 150,
       changes: {
-        effectParams: [{ amount: 310 }],
+        effectParams: [{ amount: 434 }],
       },
     },
     {
       level: 2,
       cost: 250,
       changes: {
-        cooldownTicks: Math.round(3 * TICK.RATE * 0.9), // 54 ticks (2.7 s)
+        cooldownTicks: 28, // 54 ticks (2.7 s)
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },
@@ -48,7 +48,7 @@ export const ROCK_THROW: AbilityDefinition = {
       level: 3,
       cost: 400,
       changes: {
-        effectParams: [{ amount: 335 }],
+        effectParams: [{ amount: 469 }],
       },
     },
   ],
@@ -81,7 +81,7 @@ export const METEOR_SHOWER: AbilityDefinition = {
       level: 1,
       cost: 200,
       changes: {
-        effectParams: allMeteors({ amount: 155 }), // 5 × 150 -> 5 × 200
+        effectParams: allMeteors({ amount: 217 }), // 5 × 150 -> 5 × 200
       },
     },
     {
@@ -186,8 +186,18 @@ export const NATURAL_TERRAIN_STATUS_LV2: StatusEffectDefinition = {
   modifiers: [
     {
       stat: "damageTaken",
+      // ⚠️ SMALLER IS STRONGER — this multiplies damage TAKEN, so an upgrade
+      // must sit BELOW the base tier's 0.25, not above it. It was 0.4, which
+      // meant buying the upgrade moved Earth from taking 25% of a hit to taking
+      // 40%: gold spent to be hurt more. Unlike the other 50 broken tiers this
+      // one predates the balance search — the pre-balance data carries the same
+      // 0.25 base against the same 0.4 tier — so it was wrong as designed
+      // rather than corrupted by an applier.
+      //
+      // 0.2 keeps the house step of roughly a fifth better than what it
+      // replaces, and restores the tier's advertised purpose.
       op: "mult",
-      value: 0.4,
+      value: 0.2,
     },
   ],
 };

@@ -95,14 +95,14 @@ export const FIREBALL: AbilityDefinition = {
       level: 1,
       cost: 150,
       changes: {
-        effectParams: [{ amount: 380 }],
+        effectParams: [{ amount: 532 }],
       },
     },
     {
       level: 2,
       cost: 200,
       changes: {
-        cooldownTicks: Math.round(3 * TICK.RATE * 0.9), // 54 ticks (2.7 s)
+        cooldownTicks: 42, // 54 ticks (2.7 s)
         costMultiplier: 0.85, // cooldown reductions also cut the price 15% (rounded down)
       },
     },
@@ -110,7 +110,7 @@ export const FIREBALL: AbilityDefinition = {
       level: 3,
       cost: 300,
       changes: {
-        effectParams: [{ amount: 440 }],
+        effectParams: [{ amount: 616 }],
       },
     },
   ],
@@ -150,7 +150,7 @@ export const SCORCHING_SUN: AbilityDefinition = {
       level: 1,
       cost: 300,
       changes: {
-        effectParams: [{ amount: 555 }],
+        effectParams: [{ amount: 777 }],
       },
     },
     {

@@ -203,6 +203,19 @@ function resolveConfig(config: EvaluationConfig) {
   };
 }
 
+/**
+ * Does casting this ability require a payload the action space cannot express?
+ *
+ * Mirrors the condition in `ai/legality.ts` — kept in step with it deliberately,
+ * because a denominator that disagrees with the mask would reward the search for
+ * reaching an ability the policy is never offered.
+ */
+function needsUnsupportedPayload(ability: {
+  targeting?: { secondTarget?: boolean; choices?: unknown };
+}): boolean {
+  return ability.targeting?.secondTarget === true || ability.targeting?.choices !== undefined;
+}
+
 /** The jobs an evaluation would run — useful for cost estimates and resume. */
 export function planEvaluation(config: EvaluationConfig = {}): MatchJob[] {
   const c = resolveConfig(config);
@@ -271,10 +284,25 @@ export async function evaluate(
     }
   }
 
-  // Every castable ability in the game — the denominator for "how much of the
-  // game is reachable". Passives are excluded: they are never cast.
+  // Every ability the game can actually reach — the denominator for "how much
+  // of the game is playable". Passives are excluded: they are never cast.
+  //
+  // ⚠️ ABILITIES THE ACTION SPACE CANNOT EXPRESS ARE EXCLUDED TOO, and leaving
+  // them in was quietly poisoning the usage objective. `legality.ts` refuses a
+  // cast whose payload the 22 heads cannot carry — one needing a second target,
+  // or a declared choice from a menu — and that refusal never consults cost or
+  // damage. Two abilities are in that state: love/bffs and dark/yinAndYang.
+  //
+  // Counted against 80, a perfect candidate therefore tops out at 78/80 = 0.975
+  // and the search spends the rest of its budget chasing 2.5% it cannot have.
+  // Counted against the reachable set, "all of them" is attainable and means
+  // what it says. The rule is read from the ability data rather than a list of
+  // names, so it stays correct if the action space later grows to cover them.
   const castable = KINGDOM_IDS.flatMap((k) =>
-    abilitiesForKingdom(k).filter((a) => a.kind !== "passive").map((a) => a.id),
+    abilitiesForKingdom(k)
+      .filter((a) => a.kind !== "passive")
+      .filter((a) => !needsUnsupportedPayload(a))
+      .map((a) => a.id),
   );
   const usage: UsageSummary = {
     abilities: abilityCasts,

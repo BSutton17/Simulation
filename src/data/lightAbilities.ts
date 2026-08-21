@@ -143,7 +143,7 @@ export const FIREFLIES: AbilityDefinition = {
       level: 2,
       cost: 300,
       changes: {
-        cooldownTicks: Math.round(15 * TICK.RATE * 0.9),
+        cooldownTicks: 219,
         costMultiplier: 0.85,
       },
     },
@@ -207,7 +207,7 @@ export const ILLUMINATION: AbilityDefinition = {
       changes: {
         effectParams: [
           {
-            amount: 505,
+            amount: 706,
             bonusDamageIfTargetHasStatus: {
               statusId: FIREFLIES_STATUS.id,
               extraAmount: 450,
@@ -335,7 +335,7 @@ export const LIGHT_SHOW: AbilityDefinition = {
       level: 2,
       cost: 1500,
       changes: {
-        cooldownTicks: Math.round(60 * TICK.RATE * 0.85), // 60 s -> 51 s
+        cooldownTicks: 817, // 60 s -> 51 s
         costMultiplier: 0.85,
       },
     },

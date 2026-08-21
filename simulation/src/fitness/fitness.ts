@@ -172,8 +172,11 @@ export interface UsageTargets {
 export const BALANCE_V3_FLOOR = 0.676161465883646;
 
 export const DEFAULT_USAGE_TARGETS: UsageTargets = {
-  // 80/80. The point of v4 is that every ability is reachable, so the target is
-  // not a comfortable fraction.
+  // Every REACHABLE ability. The point of v4 is that no part of the game is
+  // dead, so the target is not a comfortable fraction — but the denominator is
+  // now the set the action space can actually express (78 of 80, excluding
+  // love/bffs and dark/yinAndYang), so 1.0 is attainable rather than a ceiling
+  // the search grinds against forever. See `evaluator.ts`.
   abilityCoverage: 1,
   // Bots currently buy zero. Two per match is "shields are part of play"
   // without demanding they be spammed.

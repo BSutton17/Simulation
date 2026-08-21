@@ -37,12 +37,12 @@ export const TOUGH_LOVE: AbilityDefinition = {
     { type: "damage", target: "target", params: { amount: 254, element: "love" } },
   ],
   upgradePath: [
-    { level: 1, cost: 150, changes: { effectParams: [{ amount: 235 }] } },
+    { level: 1, cost: 150, changes: { effectParams: [{ amount: 306 }] } },
     {
       level: 2,
       cost: 250,
       changes: {
-        cooldownTicks: Math.round(3 * TICK.RATE * 0.9),
+        cooldownTicks: 44,
         costMultiplier: 0.85,
       },
     },
@@ -84,12 +84,12 @@ export const CUPIDS_ARROW: AbilityDefinition = {
     },
   ],
   upgradePath: [
-    { level: 1, cost: 200, changes: { effectParams: [{ amount: 350 }] } },
+    { level: 1, cost: 200, changes: { effectParams: [{ amount: 490 }] } },
     {
       level: 2,
       cost: 300,
       changes: {
-        cooldownTicks: Math.round(10 * TICK.RATE * 0.9),
+        cooldownTicks: 139,
         costMultiplier: 0.85,
       },
     },

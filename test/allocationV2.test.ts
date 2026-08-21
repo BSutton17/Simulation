@@ -8,6 +8,7 @@ import {
 import { planEvaluation, balancedDuelPairings } from "../simulation/src/evaluation/index.js";
 import { WEIGHT_PRESETS } from "../simulation/src/fitness/index.js";
 import { localIdentity } from "../simulation/src/distributed/identity.js";
+import { POPULATION_V1 } from "../simulation/src/evaluation/population.js";
 
 /**
  * Balance V3's match-budget split.
@@ -20,9 +21,24 @@ import { localIdentity } from "../simulation/src/distributed/identity.js";
 
 const WEIGHTS = { duel: 0.15, ffa4: 0.5, ffa7: 0.35 } as const;
 
-/** Counts a tier the way the evaluator will actually run it. */
+/**
+ * Counts a tier the way the evaluator will actually run it.
+ *
+ * ⚠️ THE POPULATION IS PINNED, and it has to be. Job counts are the product of
+ * the allocation AND the strategy roster, but only the allocation is under test
+ * here — the per-format split is the whole subject of this file. Leaving the
+ * roster to the default tied these figures to whichever instrument happened to
+ * ship: when the balance search moved from five heuristic personalities to
+ * three trained networks, every count fell by exactly 4x and two tests failed
+ * without a single allocation number having changed.
+ *
+ * v1 specifically, because these expectations were authored against it. The
+ * shares asserted below are ratios and hold under any roster; the absolute
+ * budgets only mean anything against a fixed one.
+ */
 function counts(tier: typeof SCREEN_TIER) {
   const cfg = {
+    population: POPULATION_V1,
     duel: {
       enabled: true, seedsPerPairing: tier.duelSeeds,
       pairings: tier.duelPairings ? balancedDuelPairings(tier.duelPairings) : undefined,

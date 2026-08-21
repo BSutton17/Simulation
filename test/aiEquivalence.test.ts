@@ -23,7 +23,14 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * Fingerprint of a fixed workload — winners, end ticks and placements across
  * every match, in plan order.
  *
- * Re-recorded 2026-08-20 for BALANCE V3 — the 180 searched parameters written
+ * Re-recorded 2026-08-20 for the DOUBLED BESIEGED COMEBACK — the flat income
+ * top-up (2 -> 4 gold/s per besieger), the income multiplier (0.5 -> 1.0 per
+ * besieger) and Space's boosted rate (1 -> 2). A kingdom that is ganged up on
+ * now earns far more while it happens, so who can afford what — and therefore
+ * who wins and when — moves across the whole workload. Previous value:
+ * 7e10e5b580ef28cf.
+ *
+ * Previously re-recorded 2026-08-20 for BALANCE V3 — the 180 searched parameters written
  * into the ability data files. Every match outcome moves when the balance does,
  * which is the legitimate case this note anticipates.
  *
@@ -43,7 +50,7 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * — but it must never change as a side effect of an optimisation. Re-record it
  * in the same commit as the intended change, and say why in the message.
  */
-const WORKLOAD_FINGERPRINT = "7e10e5b580ef28cf";
+const WORKLOAD_FINGERPRINT = "9de9f062a74e25c4";
 
 const SMALL = { duelPairings: 2, ffa4Compositions: 1, ffa7Compositions: 1 };
 

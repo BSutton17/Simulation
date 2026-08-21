@@ -76,8 +76,11 @@ export const COMBAT = {
    * Besieged also rallies your economy: each besieging attacker beyond the
    * first grants this many extra gold PER SECOND (your citizens work harder to
    * fund the defense). Uses the same capped stack count as the damage bonus.
+   *
+   * Doubled from 2 alongside the multiplier below: the comeback is one
+   * mechanic, and halving one of its two halves would have left it uneven.
    */
-  BESIEGED_INCOME_PER_ATTACKER: 2,
+  BESIEGED_INCOME_PER_ATTACKER: 4,
   /**
    * "Besieged" income MULTIPLIER: each attacker beyond the first raises your
    * gold production by this fraction. Unlike the flat top-up above this scales
@@ -86,14 +89,24 @@ export const COMBAT = {
    * This is the game's comeback mechanic: the kingdom everyone has decided to
    * kill earns faster while they do it, so being focused is survivable rather
    * than simply terminal.
+   *
+   * ⚠️ AT 1.0 EACH ATTACKER NOW DOUBLES INCOME, and the stack cap is what keeps
+   * that bounded: six besiegers is a 7x multiplier, not an open-ended one. The
+   * boosted rate below must stay strictly above this one or Space's "Vast
+   * Universe" loses the trait that defines it — `besieged.test.ts` asserts it.
    */
-  BESIEGED_INCOME_PCT_PER_ATTACKER: 0.5,
+  BESIEGED_INCOME_PCT_PER_ATTACKER: 1,
   /**
    * The same, doubled, for the kingdom whose passive is profiting from being
    * ganged up on (Space's "Vast Universe"). It stacks with that passive's own
    * multiplier on purpose — being everyone's target IS Space's economy.
+   *
+   * Moved 1 -> 2 with the rate above rather than being left behind: "the same,
+   * doubled" is the relationship this constant exists to express, and pinning
+   * it while the base rose to 1.0 would have quietly made Space's economy
+   * identical to everyone else's.
    */
-  BESIEGED_INCOME_PCT_PER_ATTACKER_BOOSTED: 1,
+  BESIEGED_INCOME_PCT_PER_ATTACKER_BOOSTED: 2,
 } as const;
 
 /**

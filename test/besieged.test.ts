@@ -162,15 +162,27 @@ test("a besieged attacker's Water Ball hits harder end to end", () => {
   const { match, players } = arena(4);
   const [me, a, b, c] = players;
 
+  // The SAME cast with nobody besieging, as the reference. Measuring it rather
+  // than naming a figure is what keeps this test about the multiplier: the
+  // bonus was already derived from its constant, but Water Ball's damage was
+  // still written in, so the balance search retuning that ability broke a test
+  // that has nothing to do with ability damage.
+  const plain = arena(4);
+  plain.players[3].castle.hp = 10_000;
+  activateAbility(plain.match, plain.players[0], WATER_BALL, {
+    targetId: plain.players[3].id,
+    forceCrit: false,
+  });
+  const unbesieged = 10_000 - plain.players[3].castle.hp;
+
   // Two enemies pile onto `me` (1 stack); `me` fires at a third.
   selectTarget(match, a, me.id);
   selectTarget(match, b, me.id);
   c.castle.hp = 10_000;
   activateAbility(match, me, WATER_BALL, { targetId: c.id, forceCrit: false });
-  // Derived from the constant, so retuning the bonus doesn't break the test
-  // that exists to prove it reaches the damage pipeline at all.
-  const expected = Math.round(300 * (1 + COMBAT.BESIEGED_DAMAGE_PER_ATTACKER));
+  const expected = Math.round(unbesieged * (1 + COMBAT.BESIEGED_DAMAGE_PER_ATTACKER));
   assert.equal(c.castle.hp, 10_000 - expected);
+  assert.ok(expected > unbesieged, "besieged really must hit harder, or this proves nothing");
 });
 
 // --- The income side of the comeback ----------------------------------------

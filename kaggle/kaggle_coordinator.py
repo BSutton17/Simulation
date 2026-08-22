@@ -33,15 +33,24 @@ from pathlib import Path
 REPO = "https://github.com/BSutton17/Simulation.git"
 BRANCH = "main"
 
-# The 181-dimensional ability search.
+# The ability search — now 122 dimensions, not 181.
+#
+# ⚠️ PRICES ARE NO LONGER SEARCHED. `cost` and `unlockCost` were removed once
+# the economy was fixed by measurement instead: INCOME_PER_CITIZEN 0.06 -> 0.3
+# plus targeted cuts to Water and Earthquake took owned-and-used abilities from
+# 68 to 77 of 79. Leaving prices in would let a candidate buy a little parity by
+# pricing an ability back out of reach and quietly undo that.
+#
+# What remains is what the game should be balanced ON: damage, cooldown and
+# effect duration.
 SCOPE = "expanded"
-GENERATIONS = 60
+GENERATIONS = 250
 SEED = 20260813
 SIGMA = 0.2
 PROMOTE = 1
 VALIDATE = 1
 
-# Blank uses the CMA-ES standard for this dimensionality: 4 + 3*ln(181) = 19.
+# Blank uses the CMA-ES standard for this dimensionality: 4 + 3*ln(122) = 18.
 POPULATION = ""
 
 # Match-budget split. v2 gives 7-FFA 54% of the matches for 35% of the fitness
@@ -51,15 +60,26 @@ ALLOCATION = "v2"
 # Names the experiment. Changing it starts a separate run rather than joining
 # the existing one — which is exactly why V3 has its own name and the previous
 # experiment stays untouched.
-# Dated per campaign. The balance search now measures over the trained networks
-# instead of the heuristic personalities, and the ability catalog changed with
-# the kingdom rebalance, so this is a new run and not a continuation.
+# Dated per campaign. THIS ONE IS A NEW RUN FOR SEVERAL INDEPENDENT REASONS,
+# any one of which would invalidate a resume:
+#
+#   - the action space grew 22 -> 25 heads, so every previously trained model is
+#     incompatible and `models/` was re-exported from a fresh 1500-generation
+#     run;
+#   - INCOME_PER_CITIZEN went 0.06 -> 0.3 and two kingdoms had prices cut, so
+#     every match outcome moves;
+#   - the search space itself is different: 248 dimensions down to 122, with
+#     prices frozen.
+#
+# ⚠️ IT ALSO HAS A REAL IMBALANCE TO FIX, not just polish. Fixing starvation
+# buffed Fire hardest because it was the most starved — its median holding went
+# 9 to 282 — and Water now loses every match against it. This run is the repair.
 #
 # The coordinator ALSO refuses to resume an experiment whose identity does not
 # match this build and starts an identity-qualified one instead, so a stale name
 # here is caught rather than silently obeyed. This constant only decides what
 # the run is CALLED.
-EXPERIMENT_NAME = "elementals-balance-v3-v2-s20260819"
+EXPERIMENT_NAME = "elementals-balance-v6-economy-s20260822"
 
 # The checkpoint now lives in Supabase (table `checkpoints`), not in a Kaggle
 # Dataset. /kaggle/working is deleted when a session ends, which is how the

@@ -115,6 +115,19 @@ export interface KitSlotKnowledge {
    * space that learns to supply them.
    */
   readonly needsUnsupportedPayload: boolean;
+  /** This attack demands a SECOND, distinct kingdom (Love's BFFS). */
+  readonly needsSecondTarget: boolean;
+  /** The caster must name one of these (Dark's Yin and Yang). */
+  readonly choices: readonly string[] | undefined;
+  /**
+   * This cast may be spread across several kingdoms.
+   *
+   * True only when the caster's own kingdom carries `multiTargetAttacks` AND
+   * the ability is an attack — the two conditions the engine itself applies.
+   * Reading the caster's own passive is not a visibility breach: a player can
+   * see their own kingdom.
+   */
+  readonly canSpread: boolean;
   /** Kingdom-agnostic estimate of the play's worth. See `heuristicValue`. */
   readonly heuristicValue: number;
   /** True when casting this applies a status that reveals enemy state. */
@@ -491,6 +504,13 @@ export function knowledgeFor(
   const centrepiece = standingCentrepiece(match) !== null;
 
   let revealAvailable = false;
+  // Whether this kingdom's attacks may strike several kingdoms at once, and
+  // the same condition the engine applies. Computed once per call rather than
+  // per slot.
+  const multiTargets = KINGDOM_PASSIVES[player.kingdomId as KingdomId].some(
+    (p) => p.type === "multiTargetAttacks",
+  );
+
   const kitKnowledge: KitSlotKnowledge[] = kit.map((ability) => {
     const level = getUpgradeLevel(player, ability.id);
     const resolved = resolveAbility(ability, level);
@@ -568,8 +588,17 @@ export function knowledgeFor(
             ? "anyEnemy"
             : "none",
       charges,
-      needsUnsupportedPayload:
-        resolved.targeting.secondTarget === true || resolved.targeting.choices !== undefined,
+      // ⚠️ BOTH OF THESE ARE NOW EXPRESSIBLE, so neither fences an ability off
+      // any more: SECOND_TARGET picks the partner for a `secondTarget` attack
+      // and CHOICE_PICK names an option from a `choices` menu. Kept as a hook
+      // rather than deleted, because the reason it existed has not gone away —
+      // a payload the heads cannot describe must never be offered, since the
+      // engine would refuse every such cast and the policy would learn only
+      // that the slot is broken.
+      needsUnsupportedPayload: false,
+      needsSecondTarget: resolved.targeting.secondTarget === true,
+      choices: resolved.targeting.choices,
+      canSpread: resolved.kind === "attack" && multiTargets,
       heuristicValue: heuristicValue(resolved),
       revealing,
     };

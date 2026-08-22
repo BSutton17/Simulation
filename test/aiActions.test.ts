@@ -170,8 +170,15 @@ test("charges are never spent beyond what is available or affordable", () => {
   assert.equal(chargesToSpend(null, 3, 100, 100_000), undefined);
 });
 
-test("the action layout is exactly 22 heads and maps cleanly", () => {
-  assert.equal(ACTION_SIZE, 22);
+test("the action layout is exactly 25 heads and maps cleanly", () => {
+  // 22 -> 25: three AUXILIARY heads were added so the space could describe
+  // payloads it previously could not — Air's multi-target spread, Love's BFFS
+  // partner and Dark's declared choice. Those abilities were unreachable at any
+  // price while the heads could not express them.
+  //
+  // `PRIMARY_ACTION_COUNT` is deliberately unchanged: these qualify a cast the
+  // primary head already picked, exactly like `chargeFraction`.
+  assert.equal(ACTION_SIZE, 25);
   assert.equal(primaryActionOf(0).kind, "cast");
   assert.equal(primaryActionOf(4).kind, "cast");
   assert.equal(primaryActionOf(5).kind, "invest");
@@ -183,16 +190,25 @@ test("the action layout is exactly 22 heads and maps cleanly", () => {
   assert.equal(actionName(14), "target[0]");
   assert.equal(actionName(20), "switchGate");
   assert.equal(actionName(21), "chargeFraction");
+  assert.equal(actionName(22), "spreadGate");
+  assert.equal(actionName(23), "secondTarget");
+  assert.equal(actionName(24), "choicePick");
 });
 
 test("a wrong-sized output vector is refused", () => {
   const mask = createMask();
   mask[WAIT] = 1;
-  assert.throws(() => decide(new Float32Array(8), mask), /must be 22/);
+  assert.throws(
+    () => decide(new Float32Array(8), mask),
+    new RegExp(`must be ${ACTION_SIZE}`),
+  );
 });
 
 test("legalActions refuses a wrong-sized mask", () => {
   const { match, me, history } = setup();
   const knowledge = knowledgeFor(match, me, history);
-  assert.throws(() => legalActions(knowledge, new Uint8Array(4)), /must be 22/);
+  assert.throws(
+    () => legalActions(knowledge, new Uint8Array(4)),
+    new RegExp(`must be ${ACTION_SIZE}`),
+  );
 });

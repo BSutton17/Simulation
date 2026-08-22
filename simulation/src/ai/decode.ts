@@ -1,6 +1,9 @@
 import {
   ACTION_SIZE,
   CHARGE_FRACTION,
+  CHOICE_PICK,
+  SECOND_TARGET,
+  SPREAD_GATE,
   PRIMARY_ACTION_COUNT,
   SWITCH_GATE,
   TARGET_BASE,
@@ -49,6 +52,19 @@ export interface Decision {
    * INSUFFICIENT_FUNDS. `controller.ts` converts it against the chosen slot.
    */
   readonly chargeFraction: number | null;
+  /**
+   * Air's Embrace of Winds: spread the cast across several kingdoms.
+   *
+   * A GATE rather than a count. How many kingdoms a spread may touch is the
+   * engine's business — `maxTargets` is 3 at base and 5 upgraded — and the
+   * decoder does not know the cap. Resolving a count here would produce casts
+   * the mask approved and the engine trimmed anyway.
+   */
+  readonly spread: boolean;
+  /** Love's BFFS: which other enemy to link, as a fraction of the eligible set. */
+  readonly secondTargetPick: number | null;
+  /** Dark's Yin and Yang: which declared option, as a fraction of the menu. */
+  readonly choicePick: number | null;
 }
 
 const WAIT_ACTION: PrimaryAction = { kind: "wait" };
@@ -132,6 +148,13 @@ export function decide(
     primaryIndex: bestIndex,
     retargetSlot,
     chargeFraction: mask[CHARGE_FRACTION] === 1 ? squash(outputs[CHARGE_FRACTION]!) : null,
+    // Auxiliary heads are read unconditionally: they qualify whatever cast the
+    // primary head chose, and `controller.ts` ignores them for abilities that
+    // do not take that payload. Masking them per-ability would need the mask to
+    // know which slot is about to be chosen, which it does not.
+    spread: squash(outputs[SPREAD_GATE]!) > 0.5,
+    secondTargetPick: squash(outputs[SECOND_TARGET]!),
+    choicePick: squash(outputs[CHOICE_PICK]!),
   };
 }
 

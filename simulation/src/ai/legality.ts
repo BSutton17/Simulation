@@ -85,6 +85,9 @@ export function legalActions(knowledge: PlayerKnowledge, mask: ActionMask): Acti
   // casts the engine refused in seven-seat games where several enemies had
   // banned this seat at once.
   const anyUnbanned = knowledge.enemies.some((e) => !e.eliminated && !e.targetBanned);
+  // Two, for abilities that must name a pair.
+  const twoUnbanned =
+    knowledge.enemies.filter((e) => !e.eliminated && !e.targetBanned).length >= 2;
 
   // ── casts (0–4) ───────────────────────────────────────────────────────
   let anyChargeCastable = false;
@@ -102,9 +105,23 @@ export function legalActions(knowledge: PlayerKnowledge, mask: ActionMask): Acti
       !ability.statusBlocked &&
       !ability.centrepieceBlocked &&
       // Abilities demanding a second target or a declared choice cannot be
-      // expressed by the 22 heads, and the engine rejects them up-front. See
-      // KitSlotKnowledge.needsUnsupportedPayload.
+      // ⚠️ NO LONGER A BLANKET REFUSAL. The action space used to be unable to
+      // describe a second target or a declared choice, so any ability needing
+      // one was permanently illegal — love/bffs and dark/yinAndYang were
+      // unreachable at any price, and Air could never spread. The SPREAD_GATE,
+      // SECOND_TARGET and CHOICE_PICK heads express all three now.
+      //
+      // The flag survives for shapes that are still genuinely inexpressible,
+      // and `knowledge.ts` decides what those are — so a future ability with an
+      // unsupported payload is still fenced off rather than silently offered
+      // and rejected by the engine every time.
       !ability.needsUnsupportedPayload &&
+      // A second-target attack needs a SECOND eligible kingdom to exist. In a
+      // duel there is none, and the engine refuses with SECOND_TARGET_REQUIRED
+      // — a wasted decision every time the head is picked. The mask is the
+      // right place to know this, because the controller cannot invent a
+      // partner that is not on the board.
+      (!ability.needsSecondTarget || twoUnbanned) &&
       // An enemy-directed cast with nothing to resolve against is refused by
       // the engine, so it is not a legal choice here either.
       (ability.targetRequirement === "none" ||

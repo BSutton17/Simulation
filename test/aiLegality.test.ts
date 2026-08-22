@@ -112,8 +112,23 @@ test("every cast the mask permits is accepted by the engine", () => {
       if (probe[CAST_BASE + slot] !== 1) continue;
       // A fresh, identically-configured match per attempt: casting mutates.
       const f = fixture(kingdomId, true);
-      const result = activateAbility(f.match, f.me, kit[slot]!, {
+      const ability = kit[slot]!;
+      // ⚠️ SUPPLY THE PAYLOAD THE ABILITY DECLARES, exactly as the controller
+      // does. The mask now permits casts whose legality DEPENDS on a payload —
+      // BFFS needs a partner, Yin and Yang needs a named choice — so probing
+      // them bare would report drift that does not exist while hiding any that
+      // does. `controller.ts` builds these from the SECOND_TARGET and
+      // CHOICE_PICK heads; this mirrors it.
+      const partner = f.match.gameState!
+        .getPlayers()
+        .find((p) => p.id !== f.me.id && p.id !== f.me.target);
+      const result = activateAbility(f.match, f.me, ability, {
         targetId: f.me.target ?? undefined,
+        targetIds:
+          ability.targeting.secondTarget === true && f.me.target && partner
+            ? [f.me.target, partner.id]
+            : undefined,
+        choice: ability.targeting.choices?.[0],
       });
       if (!result.ok) refused.push(`${kingdomId}/${kit[slot]!.id}: ${result.error}`);
     }
@@ -212,29 +227,32 @@ test("targeting is masked while the switch cooldown is live", () => {
   assert.equal(locked[20], 0, "the gate should close when no target is legal");
 });
 
-test("abilities needing payload the action space cannot express are masked off", () => {
-  // Love's BFFS!!! wants a second distinct enemy; Dark's Yin and Yang wants the
-  // caster to name a side. The 22 heads supply neither, and the engine rejects
-  // both up-front, so they must never be proposed. Located by metadata here
-  // exactly as legality.ts locates them, so this stays honest if the data moves.
-  const blocked: string[] = [];
+test("an ability whose payload the heads CAN describe is offered", () => {
+  // ⚠️ THIS TEST USED TO ASSERT THE OPPOSITE, and the inversion is the point.
+  // While the action space had 22 heads it could not carry a second target or a
+  // declared choice, so `legality.ts` fenced those abilities off entirely —
+  // love/bffs and dark/yinAndYang were unreachable at any price, which no
+  // balance change could ever fix. SPREAD_GATE, SECOND_TARGET and CHOICE_PICK
+  // describe all three payloads now.
+  //
+  // The rule is asserted rather than the old list, so an ability added later
+  // with a genuinely inexpressible payload still has to be handled deliberately.
   for (const kingdomId of KINGDOM_IDS) {
+    const probe = maskFor(fixture(kingdomId, true));
     const kit = abilitiesForKingdom(kingdomId).filter((a) => a.kind !== "passive");
-    const mask = maskFor(fixture(kingdomId, true));
     for (let slot = 0; slot < KIT_SLOTS; slot++) {
-      const targeting = kit[slot]!.targeting;
-      if (targeting.secondTarget === true || targeting.choices !== undefined) {
-        blocked.push(`${kingdomId}/${kit[slot]!.id}`);
-        assert.equal(
-          mask[CAST_BASE + slot],
-          0,
-          `${kit[slot]!.id} was offered but cannot be cast by this action space`,
-        );
-      }
+      const ability = kit[slot];
+      if (!ability) continue;
+      const needsPayload =
+        ability.targeting.secondTarget === true || ability.targeting.choices !== undefined;
+      if (!needsPayload) continue;
+      assert.equal(
+        probe[CAST_BASE + slot],
+        1,
+        `${kingdomId}/${ability.id} needs a payload the heads can now carry, but is masked off`,
+      );
     }
   }
-  // The fixture must actually contain such abilities, or this proves nothing.
-  assert.deepEqual(blocked.sort(), ["dark/yinAndYang", "love/bffs"]);
 });
 
 test("charge fraction is masked off for the fifteen kingdoms without charges", () => {
@@ -330,4 +348,77 @@ test("an allEnemies cast needs a living enemy this seat is not barred from", () 
     0,
     "offered an allEnemies cast with every enemy barred",
   );
+});
+
+
+// ---------------------------------------------------------------------------
+// The three payloads the action space used to be unable to describe
+//
+// `legality.ts` refused any cast whose payload the heads could not carry, and
+// that refusal never consulted cost — so Love's BFFS and Dark's Yin and Yang
+// were unreachable at ANY price, and Air could never spread. SPREAD_GATE,
+// SECOND_TARGET and CHOICE_PICK express all three now.
+//
+// Asserted against the ENGINE, not against the mask: a head that produces a
+// payload the engine still refuses would leave the policy learning only that
+// the slot is broken.
+// ---------------------------------------------------------------------------
+
+test("BFFS is offered, and the engine accepts the second target", () => {
+  const f = fixture("love", true);
+  const kit = abilitiesForKingdom("love").filter((a) => a.kind !== "passive");
+  const slot = kit.findIndex((a) => a.id === "bffs");
+  assert.ok(slot >= 0, "love should own bffs");
+
+  assert.equal(maskFor(f)[slot], 1, "bffs must now be a legal cast");
+
+  // A THIRD kingdom is the partner: the engine rejects a second target equal to
+  // the primary, which is exactly the mis-cast the old mask avoided by refusing.
+  const others = f.match.gameState!.getPlayers().filter(
+    (p) => p.id !== f.me.id && p.id !== f.enemy.id,
+  );
+  const result = activateAbility(f.match, f.me, kit[slot]!, {
+    targetId: f.enemy.id,
+    targetIds: [f.enemy.id, others[0]!.id],
+  });
+  assert.equal(result.ok, true, `engine refused BFFS: ${result.ok ? "" : result.error}`);
+});
+
+test("Yin and Yang is offered, and the engine accepts a declared choice", () => {
+  const f = fixture("dark", true);
+  const kit = abilitiesForKingdom("dark").filter((a) => a.kind !== "passive");
+  const slot = kit.findIndex((a) => a.id === "yinAndYang");
+  assert.ok(slot >= 0, "dark should own yinAndYang");
+
+  assert.equal(maskFor(f)[slot], 1, "yinAndYang must now be a legal cast");
+
+  const choices = kit[slot]!.targeting.choices!;
+  assert.ok(choices.length > 0, "the ability should declare its options");
+  for (const choice of choices) {
+    const fresh = fixture("dark", true);
+    const result = activateAbility(fresh.match, fresh.me, kit[slot]!, {
+      targetId: fresh.enemy.id,
+      choice,
+    });
+    assert.equal(result.ok, true, `engine refused choice "${choice}"`);
+  }
+});
+
+test("Air spreads one cast across several kingdoms", () => {
+  const f = fixture("air", true);
+  const kit = abilitiesForKingdom("air").filter((a) => a.kind !== "passive");
+  const breeze = kit.find((a) => a.id === "aLightBreeze")!;
+
+  const enemies = f.match.gameState!.getPlayers().filter((p) => p.id !== f.me.id);
+  assert.ok(enemies.length >= 2, "need at least two enemies to spread across");
+  const before = enemies.map((e) => e.castle.hp);
+
+  const result = activateAbility(f.match, f.me, breeze, {
+    targetId: enemies[0]!.id,
+    targetIds: enemies.map((e) => e.id),
+  });
+  assert.equal(result.ok, true);
+
+  const struck = enemies.filter((e, i) => e.castle.hp < before[i]!).length;
+  assert.ok(struck >= 2, `one cast should have hit several kingdoms, hit ${struck}`);
 });

@@ -27,9 +27,29 @@ export const WAIT = 13;
 export const TARGET_BASE = 14;
 export const SWITCH_GATE = 20;
 export const CHARGE_FRACTION = 21;
+/**
+ * ⚠️ THREE HEADS THAT TEACH THE ACTION SPACE TO SPEAK THE GAME'S OWN LANGUAGE.
+ *
+ * Three abilities were unreachable not because they were expensive but because
+ * the 22 heads could not describe casting them: `legality.ts` refused any cast
+ * whose payload it could not express, and Air's multi-target spread, Love's
+ * BFFS second target and Dark's Yin-and-Yang choice all fell into that hole.
+ * That refusal never consulted cost, so no balance change could ever reach
+ * them.
+ *
+ * All three are AUXILIARY, like CHARGE_FRACTION: they qualify a cast the
+ * primary head already chose, so `PRIMARY_ACTION_COUNT` is unchanged and no
+ * existing behaviour shifts.
+ */
+/** Air's Embrace of Winds: spread this attack across several kingdoms. */
+export const SPREAD_GATE = 22;
+/** Love's BFFS: which OTHER enemy to link, as a fraction of the eligible set. */
+export const SECOND_TARGET = 23;
+/** Dark's Yin and Yang: which declared option to name, as a fraction. */
+export const CHOICE_PICK = 24;
 
 /** Total network outputs. */
-export const ACTION_SIZE = 22;
+export const ACTION_SIZE = 25;
 
 /**
  * The primary heads — the ones an argmax chooses between. Targeting is a
@@ -73,6 +93,9 @@ export function actionName(index: number): string {
   }
   if (index === SWITCH_GATE) return "switchGate";
   if (index === CHARGE_FRACTION) return "chargeFraction";
+  if (index === SPREAD_GATE) return "spreadGate";
+  if (index === SECOND_TARGET) return "secondTarget";
+  if (index === CHOICE_PICK) return "choicePick";
   const action = primaryActionOf(index);
   return "slot" in action ? `${action.kind}[${action.slot}]` : action.kind;
 }

@@ -840,15 +840,26 @@ test("v5: every playstyle names abilities the kingdom actually owns", async () =
   }
 });
 
-test("v5: no playstyle depends on an ability the action space cannot cast", async () => {
-  // love/bffs needs a second target and dark/yinAndYang a declared choice;
-  // `legality.ts` never offers either. Rewarding them would set a target the
-  // policy is structurally unable to reach.
-  const unreachable = new Set(["bffs", "yinAndYang"]);
+test("v5: every ability the action space can describe is castable", async () => {
+  // ⚠️ THE RULE, not the exception list. A reward for an ability the heads
+  // cannot express is a target no policy can reach — invisible, because a term
+  // that never pays looks exactly like a behaviour never learned.
+  //
+  // Nothing is fenced off any more: SECOND_TARGET carries BFFS's partner and
+  // CHOICE_PICK names Yin or Yang, so the flag that used to exclude them is
+  // false everywhere. This asserts the CONDITION rather than the old list, so
+  // a future ability with a genuinely inexpressible payload still trips it.
   for (const kingdomId of KINGDOM_IDS) {
     const style = PLAYSTYLES[kingdomId]!;
+    const kit = abilitiesForKingdom(kingdomId);
     for (const id of [...style.sequence, ...(style.alternatives ?? [])]) {
-      assert.ok(!unreachable.has(id), `${kingdomId} would be rewarded for an uncastable "${id}"`);
+      const ability = kit.find((a) => a.id === id)!;
+      const inexpressible =
+        ability.targeting?.secondTarget === true && ability.targeting?.choices !== undefined;
+      assert.ok(
+        !inexpressible,
+        `${kingdomId} would be rewarded for "${id}", whose payload the heads cannot describe`,
+      );
     }
   }
 });

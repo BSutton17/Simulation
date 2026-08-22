@@ -32,7 +32,7 @@ export const OBSERVATION_VERSION = "v2";
  * rule. The ordering is part of this version because outputs 14–19 are
  * meaningless without it.
  */
-export const ACTION_VERSION = "v1";
+export const ACTION_VERSION = "v2";
 
 /**
  * The genome/network serialization shape. Declared now, unused until Phase 2 —

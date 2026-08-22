@@ -54,17 +54,16 @@ export interface Playstyle {
 }
 
 /**
- * ⚠️ VERIFIED AGAINST THE LIVE KITS, not transcribed from memory. Two entries
- * are shaped by facts worth stating:
+ * ⚠️ VERIFIED AGAINST THE LIVE KITS, not transcribed from memory.
  *
- *   love/bffs CANNOT BE CAST. It needs a second target, which the 22 action
- *   heads cannot express, so `legality.ts` never offers it. Love's intent is
- *   therefore carried by Cupid's Arrow alone — listing BFFS would set a reward
- *   the policy is structurally unable to earn.
+ * fire HAS NO ULTIMATE. Heat Wave and Blazing Determination are both
+ * `utility`, so Fire cannot earn the flat ultimate bonus at all. Its line is
+ * long enough to compensate, but the asymmetry is in the data, not here.
  *
- *   fire HAS NO ULTIMATE. Heat Wave and Blazing Determination are both
- *   `utility`, so Fire cannot earn the flat ultimate bonus at all. Its line is
- *   long enough to compensate, but the asymmetry is in the data, not here.
+ * love/bffs and dark/yinAndYang were once unreachable — the action space could
+ * not describe a second target or a declared choice, so `legality.ts` refused
+ * them at any price. The SECOND_TARGET and CHOICE_PICK heads express both now,
+ * which is why BFFS is listed again.
  */
 export const PLAYSTYLES: Record<KingdomId, Playstyle> = {
   // Waterfall applies Current; Flood and Water Ball cash it in through lifesteal.
@@ -94,7 +93,10 @@ export const PLAYSTYLES: Record<KingdomId, Playstyle> = {
     ultimateBonusInCombo: true,
   },
   dark: { sequence: [], alternatives: ["unlimitedRage"] },
-  love: { sequence: [], alternatives: ["cupidsArrow"] },
+  // BFFS is back, as asked. It was excluded while the action space could not
+  // express a second target; SECOND_TARGET now can, so rewarding it sets a
+  // target the policy can actually reach.
+  love: { sequence: [], alternatives: ["bffs", "cupidsArrow"] },
   joker: { sequence: ["aceOfSpades", "blackjack"] },
   kitsune: { sequence: [], alternatives: ["oldFriends", "azureGuidance"] },
   magma: { sequence: [], ultimateBonusInCombo: true },

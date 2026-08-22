@@ -112,14 +112,24 @@ test("kingdom count is part of identity", () => {
  * If this test fails: decide whether the change was intended. If it was, bump
  * OBSERVATION_VERSION and update these constants in the same commit.
  */
-test("the observation and visibility specifications are pinned to v2", () => {
-  // v2 added sixteen kingdom-identity inputs (64 -> 80). Without them one
-  // network played all sixteen kingdoms with no way to tell which it was in,
-  // so every per-kingdom strategy had to be averaged into a single generic
-  // policy. Visibility is UNCHANGED — the bot sees no more than before, it
-  // just knows whose kit it is holding.
+test("the observation and action specifications are pinned", () => {
+  // OBSERVATION v2 added sixteen kingdom-identity inputs (64 -> 80). Without
+  // them one network played all sixteen kingdoms with no way to tell which it
+  // was in, so every per-kingdom strategy had to be averaged into a single
+  // generic policy. Visibility is UNCHANGED — the bot sees no more than before,
+  // it just knows whose kit it is holding.
+  //
+  // ACTION v2 added three auxiliary heads (22 -> 25) so the space could
+  // describe payloads it previously could not: Air's multi-target spread,
+  // Love's BFFS partner and Dark's declared choice. Those abilities were
+  // refused by `legality.ts` at ANY price while the heads could not express
+  // them, which no balance change could ever fix.
+  //
+  // ⚠️ BOTH BUMPS INVALIDATE TRAINED MODELS, and that is the point of pinning
+  // them: a 22-output network cannot drive a 25-head space, and loading one
+  // must fail loudly rather than silently misalign.
   assert.equal(OBSERVATION_VERSION, "v2");
-  assert.equal(ACTION_VERSION, "v1");
+  assert.equal(ACTION_VERSION, "v2");
   assert.equal(
     visibilitySpecHash(),
     "920dc078",

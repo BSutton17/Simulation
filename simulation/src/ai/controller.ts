@@ -334,8 +334,47 @@ export class NetworkController implements AIController {
         const ability = this.kit[action.slot];
         if (ability === undefined) return;
         const charges = knowledge.self.kit[action.slot]?.charges ?? null;
+        const resolved = knowledge.self.kit[action.slot];
+        const primaryId = player.target ?? undefined;
+
+        // ── payloads the engine demands, built from the auxiliary heads ────
+        //
+        // Each is supplied ONLY when the ability actually takes it. Passing a
+        // second target to an ability that does not want one is harmless, but
+        // passing none to BFFS is a guaranteed SECOND_TARGET_REQUIRED — the
+        // rejection the mask used to avoid by refusing the cast outright.
+        // ⚠️ EXCLUDE BANNED AND ELIMINATED SEATS, because the engine does. It
+        // validates a second target against `isTargetingBlocked` and refuses
+        // the whole cast with INVALID_TARGET otherwise — 19 such refusals in a
+        // single seven-seat match before this filter existed. A rejected cast
+        // teaches the policy only that the slot is broken.
+        const others = orderEnemies(knowledge).filter(
+          (e) => e.id !== primaryId && !e.eliminated && !e.targetBanned,
+        );
+        const pick = (fraction: number, count: number): number =>
+          count <= 0 ? -1 : Math.min(count - 1, Math.floor(fraction * count));
+
+        let targetIds: string[] | undefined;
+        if (resolved?.needsSecondTarget && others.length > 0) {
+          const index = pick(decision.secondTargetPick ?? 0, others.length);
+          if (index >= 0 && primaryId) targetIds = [primaryId, others[index]!.id];
+        } else if (decision.spread && resolved?.canSpread && primaryId) {
+          // Air's Embrace of Winds. The engine caps the count and divides the
+          // damage; handing it the ordered enemies lets it take as many as the
+          // ability currently allows.
+          targetIds = [primaryId, ...others.map((e) => e.id)];
+        }
+
+        const choices = resolved?.choices;
+        const choice =
+          choices && choices.length > 0
+            ? choices[Math.max(0, pick(decision.choicePick ?? 0, choices.length))]
+            : undefined;
+
         const result = activateAbility(match, player, ability, {
-          targetId: player.target ?? undefined,
+          targetId: primaryId,
+          targetIds,
+          choice,
           chargesToUse: charges
             ? chargesToSpend(
                 decision.chargeFraction,

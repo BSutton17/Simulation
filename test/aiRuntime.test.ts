@@ -111,7 +111,11 @@ test("a seven-seat free-for-all runs", () => {
   );
   assert.ok(record.endedAtTick > 0);
   assert.equal(stats.length, 7);
-  assert.equal(total(stats, "rejected"), 0);
+  const why: Record<string, number> = {};
+  for (const st of stats) {
+    for (const [k, v] of Object.entries(st.rejectedBy)) why[k] = (why[k] ?? 0) + v;
+  }
+  assert.equal(total(stats, "rejected"), 0, `engine refused: ${JSON.stringify(why)}`);
 });
 
 test("matches replay identically on the same seed", () => {

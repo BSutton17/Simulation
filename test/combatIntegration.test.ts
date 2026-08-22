@@ -12,6 +12,14 @@ import type { MatchPlayer } from "../src/match/types.js";
 import type { PlayerState } from "../src/match/playerState.js";
 
 /**
+ * ⚠️ DAMAGE IS ASSERTED AGAINST `maxHp`, NEVER AGAINST 10_000. Starting health
+ * scales with the size of the table — +10% per kingdom above two — so a
+ * three-seat fixture opens at 11,000 and every hardcoded `10_000 - damage`
+ * silently became wrong when that landed. The subject here is what an ability
+ * DOES, not how large the pool it lands in happens to be.
+ */
+
+/**
  * T5.2 — combat integration tests: complex scenarios where several kingdoms
  * activate abilities in the same tick window, layering damage, shields, buffs,
  * debuffs, and statuses, then the match runs on through the real tick loop to
@@ -106,22 +114,22 @@ test("three kingdoms exchange simultaneous abilities and every interaction resol
   assert.equal(r1.ok && r2.ok && r3.ok, true);
 
   // a's hit landed before b's shield went up.
-  assert.equal(b.castle.hp, 10_000 - 200);
+  assert.equal(b.castle.hp, b.castle.maxHp - 200);
   assert.equal(b.castle.shield, 600);
   assert.equal(hasStatus(b, "burn"), true);
-  assert.equal(a.castle.hp, 10_000 - 400);
+  assert.equal(a.castle.hp, a.castle.maxHp - 400);
 
   // b is weakened (0.8× damage debuff): b's counterattack deals reduced damage
   // into a — and b's own 0.9× damageTaken buff softens a's next hit.
   const counter = activateAbility(match, b, strike("tide", 500), { targetId: "a", forceCrit: false });
   assert.equal(counter.ok, true);
-  assert.equal(a.castle.hp, 10_000 - 400 - 400); // 500 × 0.8
+  assert.equal(a.castle.hp, a.castle.maxHp - 400 - 400); // 500 × 0.8
 
   const followUp = activateAbility(match, a, strike("ember", 500), { targetId: "b", forceCrit: false });
   assert.equal(followUp.ok, true);
   // 500 × 0.9 = 450, absorbed entirely by the 600 shield.
   assert.equal(b.castle.shield, 150);
-  assert.equal(b.castle.hp, 10_000 - 200);
+  assert.equal(b.castle.hp, b.castle.maxHp - 200);
 });
 
 test("statuses and temporary modifiers expire mid-battle through the real tick loop", () => {
@@ -138,7 +146,7 @@ test("statuses and temporary modifiers expire mid-battle through the real tick l
   assert.equal(b.modifiers.length, 0);
   // b's damage is back to full once the debuff expired.
   activateAbility(match, b, strike("tide", 500), { targetId: "a", forceCrit: false });
-  assert.equal(a.castle.hp, 10_000 - 500);
+  assert.equal(a.castle.hp, a.castle.maxHp - 500);
 });
 
 test("cooldowns gate repeat casts across ticks in a running battle", () => {
@@ -151,7 +159,7 @@ test("cooldowns gate repeat casts across ticks in a running battle", () => {
   for (let t = 1; t <= 10; t++) tickMatch(match, t); // cooldown = 10
   assert.equal(getCooldown(a, "jab"), 0);
   assert.equal(activateAbility(match, a, jab, { targetId: "b", forceCrit: false }).ok, true);
-  assert.equal(b.castle.hp, 10_000 - 200);
+  assert.equal(b.castle.hp, b.castle.maxHp - 200);
 });
 
 test("a full battle runs to elimination and victory through the ability framework", () => {

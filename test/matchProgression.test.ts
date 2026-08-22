@@ -38,7 +38,9 @@ test("a match runs from start to a single winner", () => {
   assert.equal(match.phase, "active");
   assert.equal(state.getPlayers().length, 3);
   for (const p of state.getPlayers()) {
-    assert.equal(p.castle.hp, 10_000);
+    // Full health at the start, whatever the table size scaled it to — this
+    // asserts nobody has taken damage yet, not what the pool happens to be.
+    assert.equal(p.castle.hp, p.castle.maxHp);
     assert.equal(p.economy.citizens, 10);
     assert.equal(p.economy.currency, 0);
     assert.equal(p.eliminated, false);

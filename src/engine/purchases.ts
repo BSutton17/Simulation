@@ -1,4 +1,4 @@
-import { CASTLE, ECONOMY, SHIELD } from "../data/balance.js";
+import { CASTLE, ECONOMY, SHIELD, PLAYER_SCALING } from "../data/balance.js";
 import { ALL_ABILITIES } from "../data/abilitiesRegistry.js";
 import type { AbilityDefinition } from "./abilities.js";
 import type { Match } from "../match/Match.js";
@@ -236,9 +236,17 @@ export function buyShield(match: Match, player: PlayerState): TransactionResult 
   if (!validation.ok) return validation;
 
   spend(player, cost);
-  // "Better Construction" reinforces the shield at no extra cost.
+  // "Better Construction" reinforces the shield at no extra cost, and that
+  // reinforcement scales with the table for the same reason the shield itself
+  // does: a fixed bonus would shrink as a share of a scaled shield every time
+  // the game got bigger, so the perk would quietly weaken in exactly the
+  // matches where being shielded matters most.
+  const extraPlayers = Math.max(0, match.gameState!.getPlayers().length - 2);
+  const bonusScale =
+    1 + PLAYER_SCALING.SHIELD_BONUS_PER_EXTRA_PLAYER * extraPlayers;
   const granted =
-    param("shield.standardHp", SHIELD.STANDARD_HP) + perkShieldBonusHp(player);
+    param("shield.standardHp", SHIELD.STANDARD_HP) +
+    Math.round(perkShieldBonusHp(player) * bonusScale);
   player.castle.shield += granted;
   player.castle.shieldsPurchased += 1;
 

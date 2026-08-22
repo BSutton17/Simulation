@@ -14,6 +14,7 @@ import { getCooldown } from "../src/engine/cooldowns.js";
 import { applyStatus, getStatus, hasStatus, processStatusTicks } from "../src/engine/status.js";
 import { resolveDamage } from "../src/engine/damage.js";
 import { applyPassiveIncome, computeIncome } from "../src/engine/economy.js";
+import { CASTLE } from "../src/data/balance.js";
 import { earn } from "../src/engine/money.js";
 import { selectTarget } from "../src/engine/targeting.js";
 import { tickMatch } from "../src/engine/tick.js";
@@ -43,7 +44,17 @@ function pond(): { match: Match; w: PlayerState; f: PlayerState; n: PlayerState 
   match.start(createMatchConfig(match));
   const gs = match.gameState!;
   const [w, f, n] = [gs.getPlayer("w")!, gs.getPlayer("f")!, gs.getPlayer("n")!];
-  for (const p of [w, f, n]) earn(p, 10_000);
+  // ⚠️ CASTLES NORMALISED TO THE BASE POOL. Starting health scales with the
+  // size of the table (+10% per kingdom above two), and these fixtures seat
+  // three or more so there is always a third target. Every assertion here is
+  // about what an ability DOES, not how large the pool it lands in, so the
+  // pool is pinned and the scaling is tested on its own in
+  // playerScaling.test.ts.
+  for (const p of [w, f, n]) {
+    p.castle.maxHp = CASTLE.STARTING_HP;
+    p.castle.hp = CASTLE.STARTING_HP;
+    earn(p, 10_000);
+  }
   return { match, w, f, n };
 }
 

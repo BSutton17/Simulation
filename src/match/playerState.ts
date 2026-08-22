@@ -1,6 +1,7 @@
 import { KINGDOM_PASSIVES, type KingdomId } from "../data/kingdoms.js";
 import type { PerkId } from "../data/perks.js";
 import { perkShieldBonusHpFor, perkStartingGold } from "../engine/perks.js";
+import { PLAYER_SCALING } from "../data/balance.js";
 import type { MatchConfig } from "./matchConfig.js";
 import type { EffectCondition } from "../engine/conditions.js";
 import type { StatusEffectDefinition } from "../engine/status.js";
@@ -447,7 +448,21 @@ export function createPlayerState(
   // Dark's "Black Magic" runs every perk at its boosted magnitude, including
   // the two that pay out at match start.
   const boostedPerks = passives.some((p) => p.type === "boostedPerks");
-  let startingHp = config.startingCastleHp;
+  // ── table-size scaling ───────────────────────────────────────────────────
+  //
+  // Applied BEFORE kingdom passives so a multiplier like Fire's
+  // `startingCastleHpMultiplier` compounds with it rather than being erased by
+  // it: Fire at 0.9x of a scaled pool, not 0.9x of the duel pool.
+  // ⚠️ DEFAULTS TO A DUEL WHEN ABSENT. `MatchConfig` is hand-built in tests and
+  // by callers that predate this field, and `undefined - 2` is NaN — which
+  // propagates silently into `startingHp` and gives a castle no health at all
+  // rather than failing anywhere near the cause.
+  const seats = Number.isFinite(config.playerCount) ? config.playerCount : 2;
+  const extraPlayers = Math.max(0, seats - 2);
+  const hpScale = 1 + PLAYER_SCALING.HP_PER_EXTRA_PLAYER * extraPlayers;
+  const shieldScale = 1 + PLAYER_SCALING.SHIELD_PER_EXTRA_PLAYER * extraPlayers;
+
+  let startingHp = Math.round(config.startingCastleHp * hpScale);
   let startingShield = 0;
   let startingCitizens = config.startingCitizens;
   // Perks stack with kingdom passives: Space's "Blast off!" gold is added below
@@ -459,7 +474,7 @@ export function createPlayerState(
     }
     // Earth's "Rock Hard Determination" (Epic 9): start fully shielded.
     if (p.type === "startingShield") {
-      startingShield += p.amount;
+      startingShield += Math.round(p.amount * shieldScale);
     }
     // Nature's "Gardener's Gift" (Epic 12): start with extra citizens.
     if (p.type === "startingCitizensBonus") {
@@ -476,7 +491,10 @@ export function createPlayerState(
   // kingdom that starts bare gets nothing here — the perk pays out on the
   // shields they buy instead (see `buyShield`).
   if (startingShield > 0) {
-    startingShield += perkShieldBonusHpFor(perks, boostedPerks);
+    startingShield += Math.round(
+      perkShieldBonusHpFor(perks, boostedPerks) *
+        (1 + PLAYER_SCALING.SHIELD_BONUS_PER_EXTRA_PLAYER * extraPlayers),
+    );
   }
 
   return {

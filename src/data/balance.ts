@@ -41,17 +41,7 @@ export const CITIZENS = {
 /** Economy tuning. */
 export const ECONOMY = {
   /** Money awarded per citizen, per tick (0.05 per tick = 1.00 per second at 20 ticks/sec). */
-  // ⚠️ 0.06 -> 0.3, measured rather than chosen. At 0.06, EIGHT of sixteen
-  // kingdoms could not afford their own CHEAPEST ability at median holdings and
-  // the other eight sat at 0.65-0.94x of it — the price table was never
-  // reachable, which is why 13 of 16 never-cast abilities were never even
-  // bought.
-  //
-  // Swept over 100 matches with the trained champion: 0.12 leaves 4 kingdoms
-  // starved, 0.18 leaves 3, and 0.3 leaves 1. Above that it gets WORSE, not
-  // better — 0.5 starves 2 — because the extra income is spent rather than
-  // held, so the fix is not "more is better".
-  INCOME_PER_CITIZEN: 0.3,
+  INCOME_PER_CITIZEN: 0.06,
   /** Base cost of the first purchased citizen. */
   CITIZEN_COST: 25,
   /**
@@ -185,6 +175,38 @@ export const TICK = {
 } as const;
 
 /** Shield defaults. */
+/**
+ * How a bigger table changes what a castle can take.
+ *
+ * ⚠️ MORE PLAYERS MEANS MORE INCOMING DAMAGE, not more time. In a 7-player
+ * free-for-all a castle can be the target of six kingdoms at once while still
+ * only earning one kingdom's income, so a health pool sized for a duel is spent
+ * far faster than the match can be won. These scale the pool with the table
+ * rather than asking every ability to be tuned twice.
+ *
+ * Counted from TWO, so a duel is unchanged: at `n` players a castle starts with
+ * `1 + HP_PER_EXTRA_PLAYER * (n - 2)` times its base health.
+ */
+export const PLAYER_SCALING = {
+  /** Extra starting castle HP per player above the second. */
+  HP_PER_EXTRA_PLAYER: 0.1,
+  /**
+   * Extra starting SHIELD per player above the second.
+   *
+   * Half the health rate on purpose: a shield is a burst of protection that
+   * arrives once, and scaling it as hard as the health pool would make the
+   * opening of a large game swingier rather than longer.
+   */
+  SHIELD_PER_EXTRA_PLAYER: 0.05,
+  /**
+   * The same rate again for the perk that reinforces a shield, so a buff bought
+   * in a seven-player game is worth what it is worth in a duel RELATIVE to the
+   * shield it reinforces. Without it the reinforcement would shrink as a share
+   * of a scaled shield every time the table grew.
+   */
+  SHIELD_BONUS_PER_EXTRA_PLAYER: 0.05,
+} as const;
+
 export const SHIELD = {
   /** Health of the standard purchasable shield. */
   STANDARD_HP: 1750,

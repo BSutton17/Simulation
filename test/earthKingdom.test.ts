@@ -9,6 +9,7 @@ import {
   resolveAbility,
   type AbilityDefinition,
 } from "../src/engine/abilities.js";
+import { CASTLE } from "../src/data/balance.js";
 import { earn } from "../src/engine/money.js";
 import { getStatus } from "../src/engine/status.js";
 import {
@@ -67,7 +68,15 @@ function bedrock(kingdoms: string[]): { match: Match; players: PlayerState[] } {
   match.start(createMatchConfig(match));
   const gs = match.gameState!;
   const players = kingdoms.map((_, i) => gs.getPlayer(`p${i}`)!);
-  for (const p of players) earn(p, 100_000);
+  // ⚠️ CASTLES NORMALISED TO THE BASE POOL. Starting health scales with the
+  // table (+10% per kingdom above two) and these fixtures seat three or four so
+  // aftershocks have somewhere to land. Every assertion here is about what an
+  // ability DOES; the scaling is tested on its own in playerScaling.test.ts.
+  for (const p of players) {
+    p.castle.maxHp = CASTLE.STARTING_HP;
+    p.castle.hp = CASTLE.STARTING_HP;
+    earn(p, 100_000);
+  }
   return { match, players };
 }
 
@@ -179,6 +188,11 @@ test("Earthquake damages the target and deals aftershock damage to every other k
   const { match, players } = bedrock(["earth", "plains", "water", "plains"]);
   const [a, b, c, d] = players;
 
+  // ⚠️ CAPTURED, NOT ASSUMED. Earth's starting shield scales with the table like
+  // health does, and this fixture seats four — so the pool it opens with is not
+  // the passive's raw amount. Distraught is a CREDIT ON TOP of whatever that
+  // was, which is what this test is about.
+  const shieldBefore = a.castle.shield;
   const r = activateAbility(match, a, EARTHQUAKE, { targetId: "p1", forceCrit: false });
   assert.equal(r.ok, true);
   const main = EARTHQUAKE.effects[0].params.amount as number;
@@ -189,7 +203,7 @@ test("Earthquake damages the target and deals aftershock damage to every other k
   // Distraught credits EVERY hit separately — the main one and both aftershocks.
   assert.equal(
     a.castle.shield,
-    EARTH_START_SHIELD +
+    shieldBefore +
       Math.round(main * DISTRAUGHT_PCT) +
       2 * Math.round(after * DISTRAUGHT_PCT),
   );

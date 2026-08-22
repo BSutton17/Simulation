@@ -13,6 +13,14 @@ export interface MatchConfig {
   startingCitizens: number;
   startingCastleHp: number;
   /**
+   * How many kingdoms are actually IN this match.
+   *
+   * ⚠️ NOT `maxPlayers`, which is the room's capacity. Health scales with the
+   * number of kingdoms that can shoot at you, and a six-seat room running a
+   * duel is a duel.
+   */
+  playerCount: number;
+  /**
    * Damage Dark must absorb to fill the Unlimited Rage meter. Sent so the
    * client's meter reads the real cap instead of keeping its own copy — a
    * duplicated constant here is exactly how the HUD ended up advertising a
@@ -31,6 +39,9 @@ export function createMatchConfig(match: Match): MatchConfig {
     tickRate: TICK.RATE,
     startingCitizens: param("citizens.startingCount", CITIZENS.STARTING_COUNT),
     startingCastleHp: param("castle.startingHp", CASTLE.STARTING_HP),
+    // Read at match start and frozen into the snapshot, like every other value
+    // here — a player leaving mid-game must not retroactively shrink castles.
+    playerCount: match.getPlayers().length,
     rageFull: DARK.RAGE_FULL,
     memoryFull: KITSUNE.MEMORY_FULL,
   };

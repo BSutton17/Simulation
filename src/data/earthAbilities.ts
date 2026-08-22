@@ -118,7 +118,7 @@ export const EARTHQUAKE: AbilityDefinition = {
   id: "earthquake",
   name: "Earthquake",
   kind: "attack",
-  cost: 245,
+  cost: 699,
   unlockCost: 350,
   cooldownTicks: Math.round(18.15 * TICK.RATE), // 17.75 s
   targeting: { mode: "singleEnemy" },

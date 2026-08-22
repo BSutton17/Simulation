@@ -1,6 +1,8 @@
 import type { MatchRecord } from "../types.js";
 import type { MatchFormat } from "./slate.js";
 import type { SeatCombat } from "./matchObserver.js";
+import type { KingdomId } from "../../../src/data/kingdoms.js";
+import { PLAYSTYLES, comboProgress, spamPenalty } from "./playstyle.js";
 
 /**
  * AI fitness — how good a PLAYER is.
@@ -15,7 +17,7 @@ import type { SeatCombat } from "./matchObserver.js";
  * becomes something nobody can reason about and a policy learns to farm.
  */
 
-export const AI_FITNESS_VERSION = "v4";
+export const AI_FITNESS_VERSION = "v5";
 
 /** Everything one evaluation match produced. Kept whole, not reduced to a number. */
 export interface ScenarioResult {
@@ -74,6 +76,19 @@ export interface FitnessTerms {
   activity: number;
   variety: number;
   resource: number;
+  /** The kingdom's intended line, in full or in part. */
+  combo: number;
+  /** Casting the kingdom's ultimate at all. */
+  ultimate: number;
+  /** Holding a shield through Light Show, and breaking a volcano. */
+  defense: number;
+  /**
+   * Repeating one ability, as a NEGATIVE contribution.
+   *
+   * Recorded like any other term so a score can be taken apart, but it is the
+   * only one that subtracts.
+   */
+  spam: number;
   /** Multiplier applied by the guards (1 = untouched). */
   guard: number;
   guardReason: string | null;
@@ -146,6 +161,47 @@ export interface FitnessConfig {
    */
   varietyWeight: number;
   /**
+   * Playing the kingdom the way it was designed to be played.
+   *
+   * ⚠️ A HABIT, NOT A SCRIPT. Partial credit means the first two steps of a
+   * five-step line already pay, so the behaviour can be learned incrementally
+   * instead of only rewarding a finished combo nobody stumbles into. The term
+   * saturates, so a genome cannot farm it by running the line and nothing else,
+   * and it sits under winWeight so a combo never beats a victory.
+   */
+  comboWeight: number;
+  /**
+   * Casting the kingdom's ultimate at all.
+   *
+   * Deliberately large. Ultimates are the abilities the policy never buys —
+   * measured, 13 of 16 never-cast abilities are never even unlocked — so the
+   * reward has to be worth the detour of saving for one.
+   */
+  ultimateWeight: number;
+  /**
+   * Reacting to the two telegraphed threats in the game.
+   *
+   * ⚠️ THE ONLY TERM THAT SCORES READING THE BOARD. Light Show announces itself
+   * and a volcano stands in the middle of the field on a timer — both are
+   * visible, and both punish a policy that just keeps casting. Holding a shield
+   * through the first and helping break the second are the two places where
+   * paying attention beats acting, so they are worth paying for directly.
+   *
+   * Small on purpose: these are situational, and a genome that never meets a
+   * Light Show or a volcano must not be scored as though it failed.
+   */
+  defenseWeight: number;
+  /**
+   * Cost of casting the same ability consecutively.
+   *
+   * Scales with the run: a pair is a nudge, a triple costs real score, four or
+   * more is meant to hurt. Multiplied by `repeatPenaltyFor`, which returns the
+   * shape.
+   */
+  spamWeight: number;
+  /** Ceiling on the spam penalty, as a share of the scale. */
+  spamCap: number;
+  /**
    * Spending on DEFENCE AND UPKEEP — shields and repairs — saturating.
    *
    * Bots buy essentially no shields today (0.16 per match across a full
@@ -174,16 +230,27 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // stylish loss beat a scrappy win; taking the budget from the terms that
   // cause the problem keeps winning on top AND removes the incentive.
   //
-  // was 0.35
-  placementWeight: 0.2,
-  survivalWeight: 0.1,
-  // was 0.15
-  combatWeight: 0.1,
+  // ⚠️ EVERY SHAPING TERM WAS TRIMMED to pay for combo and ultimate without
+  // breaking the rule that winning outranks everything else combined. The
+  // non-win terms now total 0.93, still under winWeight's 1.00.
+  //
+  // Variety took the largest cut, from 0.30 to 0.12, because COMBO SUBSUMES IT:
+  // a kingdom's intended line uses three to five different abilities by
+  // construction, so paying for range separately was paying twice for the same
+  // behaviour. Variety remains only to keep kingdoms whose intent is a single
+  // ability (Dark, Kitsune, Love) from collapsing onto one cast.
+  //
+  // was 0.20
+  placementWeight: 0.12,
+  // was 0.10
+  survivalWeight: 0.06,
+  // was 0.10
+  combatWeight: 0.06,
   timeoutCap: 0.25,
   inactivityScore: 0,
   // Deliberately smaller than every other term: it exists to leave the
   // do-nothing basin, not to compete with winning.
-  activityWeight: 0.08,
+  activityWeight: 0.05,
   activityTarget: 20,
   // ⚠️ WINNING MUST REMAIN THE TOP PRIORITY, and that is an arithmetic property
   // rather than an intention: every non-win term sums to 0.84, which is less
@@ -191,8 +258,18 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // outscores a loss with the best possible. The margin survived raising
   // variety from 0.12 to 0.30 only because placement and combat paid for it —
   // raising variety alone would have totalled 1.04 and inverted the rule.
-  varietyWeight: 0.3,
-  resourceWeight: 0.06,
+  varietyWeight: 0.1,
+  comboWeight: 0.25,
+  ultimateWeight: 0.15,
+  defenseWeight: 0.06,
+  // Applied per repeat-run via `repeatPenaltyFor`, then capped.
+  spamWeight: 0.06,
+  // ⚠️ CAPPED ON PURPOSE. An uncapped escalating penalty makes casting nothing
+  // score better than playing badly, and the inactivity guard already owns that
+  // failure mode. The cap keeps spam strictly worse than varied play without
+  // making silence attractive.
+  spamCap: 0.45,
+  resourceWeight: 0.04,
   resourceTarget: 3,
 };
 
@@ -205,7 +282,13 @@ export function maxScore(config: FitnessConfig): number {
     config.combatWeight +
     config.activityWeight +
     config.varietyWeight +
-    config.resourceWeight
+    config.resourceWeight +
+    config.comboWeight +
+    config.ultimateWeight +
+    config.defenseWeight
+    // The spam penalty is excluded deliberately: it only ever subtracts, so it
+    // cannot raise the ceiling, and including it would understate the maximum a
+    // clean genome can actually reach.
   );
 }
 
@@ -253,6 +336,16 @@ export interface ScenarioContext {
     distinctAbilities: number;
     /** Castable abilities available to this seat. */
     kitSize: number;
+    /**
+     * Every cast IN ORDER, and the indices exempt from the repeat penalty.
+     *
+     * Order is what separates a rotation from spam and a combo from three
+     * unrelated casts, and a Set cannot carry it. See `matchObserver`.
+     */
+    castSequence: readonly string[];
+    exemptCasts: ReadonlySet<number>;
+    /** Casts of this kingdom's `ultimate`-kind abilities. */
+    ultimateCasts: number;
   };
 }
 
@@ -306,6 +399,40 @@ export function scoreScenario(
         (context.behaviour.shields + context.behaviour.repairs) /
           Math.max(1, config.resourceTarget),
       ),
+    // ── the kingdom's intended play ──────────────────────────────────────
+    //
+    // Partial credit by design: `comboProgress` returns how far along the line
+    // the seat got, so two steps of Fire's five already pay. A genome cannot
+    // learn a five-cast sequence that only rewards completion — there is
+    // nothing to climb toward.
+    //
+    // Earth is the exception the data forces: its intent is the SHIELD, not a
+    // cast sequence, so buying one is what scores.
+    combo:
+      config.comboWeight *
+      (PLAYSTYLES[context.kingdom as KingdomId]?.shieldIsTheIntent
+        ? Math.min(1, context.behaviour.shields)
+        : comboProgress(context.kingdom as KingdomId, context.behaviour.castSequence)),
+    // Flat, and paid on the FIRST ultimate rather than per cast. The problem is
+    // that ultimates are never reached at all; paying per cast would reward
+    // spamming one once it is, which is the behaviour the repeat penalty exists
+    // to stop.
+    ultimate: context.behaviour.ultimateCasts > 0 ? config.ultimateWeight : 0,
+    // Reacting to what the board announced. Saturating, so one good read pays
+    // most of the term and a genome cannot farm it by hoarding shields.
+    defense:
+      config.defenseWeight *
+      Math.min(
+        1,
+        Math.min(1, context.combat.shieldedVsLightShow) * 0.5 +
+          Math.min(1, context.combat.volcanoShare) * 0.5,
+      ),
+    // Negative. Subtracted below rather than added.
+    spam: -Math.min(
+      config.spamCap,
+      config.spamWeight *
+        spamPenalty(context.behaviour.castSequence, context.behaviour.exemptCasts),
+    ),
     guard: 1,
     guardReason: null,
   };
@@ -317,7 +444,14 @@ export function scoreScenario(
     terms.combat +
     terms.activity +
     terms.variety +
-    terms.resource;
+    terms.resource +
+    terms.combo +
+    terms.ultimate +
+    terms.defense +
+    // Already negative. Floored at zero so the worst possible spammer scores
+    // nothing rather than going negative and inverting comparisons downstream.
+    terms.spam;
+  score = Math.max(0, score);
 
   // Guards. Both describe strategies that score well while accomplishing
   // nothing, and both are reachable in this game.

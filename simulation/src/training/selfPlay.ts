@@ -1,3 +1,4 @@
+import { ultimateCastsOf } from "./matchEvaluator.js";
 import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
 import { runHeadlessMatch } from "../headless.js";
 import { mulberry32 } from "../rng.js";
@@ -358,6 +359,12 @@ export function playTable(
             kitSize: abilitiesForKingdom(table.kingdoms[seat]!).filter(
               (a) => a.kind !== "passive",
             ).length,
+            castSequence: combat.castSequence,
+            exemptCasts: combat.exemptCasts,
+            ultimateCasts: ultimateCastsOf(
+              table.kingdoms[seat]! as KingdomId,
+              combat.castSequence,
+            ),
           },
         },
         config,

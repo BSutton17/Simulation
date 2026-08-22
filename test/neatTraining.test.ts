@@ -4,6 +4,9 @@ import { createRunner } from "../simulation/src/training/parallel/runner.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PLAYSTYLES, comboProgress, repeatPenaltyFor, spamPenalty } from "../simulation/src/training/playstyle.js";
+import { KINGDOM_IDS } from "../src/data/kingdoms.js";
+import { abilitiesForKingdom } from "../src/data/kingdomAbilities.js";
 import {
   ELEMENTALS_SHAPE,
   aggregate,
@@ -59,16 +62,37 @@ function record(overrides: Partial<MatchRecord> = {}): MatchRecord {
   };
 }
 
-function context(overrides: Partial<ScenarioContext> = {}): ScenarioContext {
-  return {
+/**
+ * A scenario, with only the parts a test cares about stated.
+ *
+ * ⚠️ `behaviour` and `combat` MERGE rather than replace. A test that overrides
+ * one field of behaviour is saying "everything else is ordinary", not "and
+ * nothing else happened" — and when fitness gained cast sequences, replacing
+ * silently handed every such test an undefined sequence.
+ */
+function context(
+  overrides: Partial<Omit<ScenarioContext, "behaviour" | "combat">> & {
+    behaviour?: Partial<ScenarioContext["behaviour"]>;
+    combat?: Partial<ScenarioContext["combat"]>;
+  } = {},
+): ScenarioContext {
+  const { behaviour, combat, ...rest } = overrides;
+  const base = {
     scenarioId: "duel:water:balanced:s0:r0",
     format: "duel",
     seats: 2,
     kingdom: "water",
     seat: 0,
-    combat: { casts: 20, abilitiesUsed: new Set(["waterBall", "waterfall"]), damageDealt: 5_000, damageReceived: 5_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0 },
-    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 1, shields: 1, retargets: 2, waits: 10, decisions: 100, forcedWaits: 0, distinctAbilities: 2, kitSize: 5 },
-    ...overrides,
+    combat: { casts: 20, abilitiesUsed: new Set(["waterBall", "waterfall"]), castSequence: ["waterBall", "waterfall"], exemptCasts: new Set<number>(), damageDealt: 5_000, damageReceived: 5_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0, shieldedVsLightShow: 0, volcanoDamage: 0, volcanoShare: 0 },
+    // A default that is neither spammy nor a combo, so a test that cares about
+    // one of those states it explicitly rather than inheriting it.
+    behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 1, shields: 1, retargets: 2, waits: 10, decisions: 100, forcedWaits: 0, distinctAbilities: 2, kitSize: 5, castSequence: ["waterBall", "waterfall"], exemptCasts: new Set<number>(), ultimateCasts: 0 },
+  };
+  return {
+    ...base,
+    ...rest,
+    combat: { ...base.combat, ...combat },
+    behaviour: { ...base.behaviour, ...behaviour },
   };
 }
 
@@ -211,7 +235,8 @@ test("terms always reconstruct the score", async () => {
   const rebuilt =
     result.terms.win + result.terms.placement + result.terms.survival +
     result.terms.combat + result.terms.activity + result.terms.variety +
-    result.terms.resource;
+    result.terms.resource + result.terms.combo + result.terms.ultimate +
+    result.terms.defense + result.terms.spam;
   assert.ok(Math.abs(rebuilt - result.score) < 1e-9, "a score must be explainable from its terms");
 });
 
@@ -572,7 +597,8 @@ test("v3: winning outranks every other term COMBINED", async () => {
   // behaviour must beat a loss with the best possible.
   const shaping =
     FIT.placementWeight + FIT.survivalWeight + FIT.combatWeight +
-    FIT.activityWeight + FIT.varietyWeight + FIT.resourceWeight;
+    FIT.activityWeight + FIT.varietyWeight + FIT.resourceWeight +
+    FIT.comboWeight + FIT.ultimateWeight + FIT.defenseWeight;
   assert.ok(
     FIT.winWeight > shaping,
     `winWeight ${FIT.winWeight} must exceed all shaping terms (${shaping})`,
@@ -723,4 +749,106 @@ test("v4: the first champion faces no floor", async () => {
   // There is no incumbent to regress against, so nothing may block the run
   // from ever crowning anyone.
   assert.ok(!championWouldRegress(0.0, 96, null), "a null incumbent imposes no floor");
+});
+
+
+// ---------------------------------------------------------------------------
+// v5: punish spam, reward the kingdom's intended play
+//
+// Variety paid for RANGE and could not tell A B A B from A A A A B. Both reach
+// two abilities; one is a rotation and one is spam with a garnish. v5 scores
+// ORDER: consecutive repeats cost, and a kingdom's designed line pays.
+// ---------------------------------------------------------------------------
+
+test("v5: the repeat penalty escalates — a pair nudges, four hurts", async () => {
+  const two = repeatPenaltyFor(2);
+  const three = repeatPenaltyFor(3);
+  const four = repeatPenaltyFor(4);
+
+  assert.equal(repeatPenaltyFor(1), 0, "casting once is not a repeat");
+  assert.ok(two > 0 && three > two && four > three, "each step must cost more");
+  // Not merely increasing — the gaps themselves grow, which is what "massive at
+  // four" means. A linear ramp would make the fourth cast no scarier than the
+  // second.
+  assert.ok(three - two > two, "the third repeat must cost more than the second did");
+  assert.ok(four - three >= three - two, "the fourth must not be a gentler step");
+});
+
+test("v5: A B A B is a rotation; A A A B is spam", async () => {
+  const rotation = spamPenalty(["zap", "hack", "zap", "hack"], new Set());
+  const spam = spamPenalty(["zap", "zap", "zap", "hack"], new Set());
+  assert.equal(rotation, 0, "alternating is not repetition");
+  assert.ok(spam > 0, "three in a row must cost");
+
+  // The measurement variety could not make: both reach two distinct abilities.
+  const distinct = new Set(["zap", "hack"]).size;
+  assert.equal(distinct, 2, "…and both look identical to a distinct-ability count");
+});
+
+test("v5: Thundering Fate lifts the repeat penalty for Electricity", async () => {
+  const casts = ["zap", "zap", "zap", "zap", "zap"];
+  const punished = spamPenalty(casts, new Set());
+  // Every cast made inside the window is exempt.
+  const inside = spamPenalty(casts, new Set([0, 1, 2, 3, 4]));
+
+  assert.ok(punished > 0, "五 zaps in a row is spam without the window");
+  assert.equal(inside, 0, "…and is the intended payoff inside it");
+});
+
+test("v5: an exempt cast does not break the run around it", async () => {
+  // A Zap fired inside the window, between two outside it, must not be counted
+  // as separating them — otherwise the window would launder ordinary spam.
+  const laundered = spamPenalty(["zap", "zap", "zap"], new Set([1]));
+  assert.ok(laundered > 0, "the exemption must not hide the repeats around it");
+});
+
+test("v5: combo progress pays partway, and order matters", async () => {
+  // Nature: acidRain -> gastroAcid -> sludge
+  const none = comboProgress("nature", ["sludge"]);
+  const part = comboProgress("nature", ["acidRain", "gastroAcid"]);
+  const full = comboProgress("nature", ["acidRain", "gastroAcid", "sludge"]);
+
+  assert.ok(part > none, "two of three steps must pay more than none");
+  assert.ok(full > part, "…and completing it must pay more still");
+  assert.equal(full, 1);
+
+  // The SAME three casts in the wrong order are not the combo.
+  const scrambled = comboProgress("nature", ["sludge", "gastroAcid", "acidRain"]);
+  assert.ok(scrambled < full, "order is what makes it a combo");
+});
+
+test("v5: reacting to the board is not required, only rewarded", async () => {
+  // Interruptions must not void an attempt — a real match will force a reaction
+  // between steps, and a policy that answers it should not lose the combo.
+  const interrupted = comboProgress("nature", [
+    "acidRain", "sludge", "gastroAcid", "poisonApple", "sludge",
+  ]);
+  assert.equal(interrupted, 1, "casting something else mid-line must not void it");
+});
+
+test("v5: every playstyle names abilities the kingdom actually owns", async () => {
+  // ⚠️ The table is hand-written from a design brief, and a typo in it would be
+  // a reward no policy can ever earn — invisible, because a term that never
+  // pays looks exactly like a behaviour never learned.
+  for (const kingdomId of KINGDOM_IDS) {
+    const style = PLAYSTYLES[kingdomId];
+    assert.ok(style, `${kingdomId} has no playstyle`);
+    const kit = new Set(abilitiesForKingdom(kingdomId).map((a) => a.id));
+    for (const id of [...style.sequence, ...(style.alternatives ?? [])]) {
+      assert.ok(kit.has(id), `${kingdomId}'s playstyle names "${id}", which is not in its kit`);
+    }
+  }
+});
+
+test("v5: no playstyle depends on an ability the action space cannot cast", async () => {
+  // love/bffs needs a second target and dark/yinAndYang a declared choice;
+  // `legality.ts` never offers either. Rewarding them would set a target the
+  // policy is structurally unable to reach.
+  const unreachable = new Set(["bffs", "yinAndYang"]);
+  for (const kingdomId of KINGDOM_IDS) {
+    const style = PLAYSTYLES[kingdomId]!;
+    for (const id of [...style.sequence, ...(style.alternatives ?? [])]) {
+      assert.ok(!unreachable.has(id), `${kingdomId} would be rewarded for an uncastable "${id}"`);
+    }
+  }
 });

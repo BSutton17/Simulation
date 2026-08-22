@@ -1,3 +1,4 @@
+import type { KingdomId } from "../../../src/data/kingdoms.js";
 import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
 import { runHeadlessMatch } from "../headless.js";
 import { PERSONALITIES } from "../personalities.js";
@@ -57,6 +58,27 @@ function profileFor(id: string): PersonalityProfile {
   const profile = PERSONALITIES[id as keyof typeof PERSONALITIES];
   if (!profile) throw new Error(`unknown opponent profile "${id}"`);
   return profile as PersonalityProfile;
+}
+
+
+/**
+ * Casts of this kingdom's ultimate-kind abilities.
+ *
+ * Read from the kit rather than a hardcoded list, so a kingdom that gains or
+ * loses an ultimate is scored correctly without anyone remembering to update a
+ * table. Fire currently has NONE — both its non-attacks are `utility` — so it
+ * scores zero here by construction, which is a fact about the data rather than
+ * about the policy.
+ */
+export function ultimateCastsOf(kingdomId: KingdomId, sequence: readonly string[]): number {
+  const ultimates = new Set(
+    abilitiesForKingdom(kingdomId)
+      .filter((a) => a.kind === "ultimate")
+      .map((a) => a.id),
+  );
+  let n = 0;
+  for (const id of sequence) if (ultimates.has(id)) n += 1;
+  return n;
 }
 
 const emptyStats = (): ControllerStats => ({
@@ -178,6 +200,12 @@ export function playScenario(
         kitSize: abilitiesForKingdom(scenario.candidateKingdom).filter(
           (a) => a.kind !== "passive",
         ).length,
+        castSequence: combat.castSequence,
+        exemptCasts: combat.exemptCasts,
+        ultimateCasts: ultimateCastsOf(
+          scenario.candidateKingdom as KingdomId,
+          combat.castSequence,
+        ),
       },
     },
     config,

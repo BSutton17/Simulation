@@ -23,7 +23,16 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * Fingerprint of a fixed workload — winners, end ticks and placements across
  * every match, in plan order.
  *
- * Re-recorded 2026-08-21 for the UPGRADE-LADDER REPAIR — 50 tiers that were
+ * Re-recorded 2026-08-22 for SHIELDS AT 300, down from 400. A cheaper shield
+ * changes what every kingdom can afford and when, so purchase order and
+ * therefore match outcomes move across the workload. Previous value:
+ * b54418c2d2f01826.
+ *
+ * The v5 AI fitness landed in the same window and does NOT affect this: the
+ * workload is driven by POPULATION_V1 heuristics, which do not consult the
+ * training fitness at all.
+ *
+ * Previously re-recorded 2026-08-21 for the UPGRADE-LADDER REPAIR — 50 tiers that were
  * worse than the value they replaced, plus Natural Terrain's Lv2 damage
  * multiplier. Upgrades that had been weakening abilities now strengthen
  * them, so which ability a player buys, and what it does after they buy it,
@@ -56,7 +65,7 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * — but it must never change as a side effect of an optimisation. Re-record it
  * in the same commit as the intended change, and say why in the message.
  */
-const WORKLOAD_FINGERPRINT = "b54418c2d2f01826";
+const WORKLOAD_FINGERPRINT = "3d644512e1d2d7be";
 
 const SMALL = { duelPairings: 2, ffa4Compositions: 1, ffa7Compositions: 1 };
 

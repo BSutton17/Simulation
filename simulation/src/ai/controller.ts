@@ -122,6 +122,26 @@ export interface ControllerStats {
   castBlockedNotUnlocked: number[];
   castBlockedNotAffordable: number[];
   castBlockedOther: number[];
+  /**
+   * "Blocked" split into the reasons that demand DIFFERENT fixes.
+   *
+   * ⚠️ A SINGLE "not cast" COUNT HIDES FOUR PROBLEMS. An ability the seat
+   * cannot afford wants a price change; one that is always on cooldown wants a
+   * cooldown change; one gated behind a meter wants the meter reached; and one
+   * that is legal, affordable, ready, and still never chosen wants nothing from
+   * balance at all — that is the policy's judgement, and no number in the data
+   * files will move it.
+   *
+   * Measured because 1.18 owned abilities go unused every match and guessing
+   * which of the four it was has already been wrong twice.
+   */
+  castBlockedCooldown: number[];
+  castBlockedCharges: number[];
+  castBlockedMeter: number[];
+  castBlockedStatus: number[];
+  castBlockedNoTarget: number[];
+  /** Decisions where the cast was fully legal and the policy chose otherwise. */
+  castDeclined: number[];
   /** Decisions on which BUYING this slot was affordable, and on which it was bought. */
   investAffordable: number[];
   investChosen: number[];
@@ -155,6 +175,12 @@ export class NetworkController implements AIController {
     castBlockedNotUnlocked: new Array<number>(KIT_SLOTS).fill(0),
     castBlockedNotAffordable: new Array<number>(KIT_SLOTS).fill(0),
     castBlockedOther: new Array<number>(KIT_SLOTS).fill(0),
+    castBlockedCooldown: new Array<number>(KIT_SLOTS).fill(0),
+    castBlockedCharges: new Array<number>(KIT_SLOTS).fill(0),
+    castBlockedMeter: new Array<number>(KIT_SLOTS).fill(0),
+    castBlockedStatus: new Array<number>(KIT_SLOTS).fill(0),
+    castBlockedNoTarget: new Array<number>(KIT_SLOTS).fill(0),
+    castDeclined: new Array<number>(KIT_SLOTS).fill(0),
     investAffordable: new Array<number>(KIT_SLOTS).fill(0),
     investChosen: new Array<number>(KIT_SLOTS).fill(0),
   };
@@ -216,6 +242,21 @@ export class NetworkController implements AIController {
         this.stats.castLegal[slot]! += 1;
         continue;
       }
+      {
+        // Attributed in the order a player would experience them.
+        const k = knowledge.self.kit[slot];
+        if (k !== undefined && k.unlocked) {
+          if (!k.affordable) {
+            // counted below as notAffordable too; recorded here for the split
+          } else if (k.cooldownRemaining > 0) this.stats.castBlockedCooldown[slot]! += 1;
+          else if (k.charges !== null && k.charges.available <= 0) {
+            this.stats.castBlockedCharges[slot]! += 1;
+          } else if (!k.meterReady) this.stats.castBlockedMeter[slot]! += 1;
+          else if (k.statusBlocked || k.centrepieceBlocked) {
+            this.stats.castBlockedStatus[slot]! += 1;
+          } else this.stats.castBlockedNoTarget[slot]! += 1;
+        }
+      }
       // Attributed in the order the player experiences them: an ability you have
       // not bought is not "too expensive to cast", it is not yours yet.
       const kit = knowledge.self.kit[slot];
@@ -242,6 +283,12 @@ export class NetworkController implements AIController {
       decision.primaryIndex < CAST_BASE + KIT_SLOTS
     ) {
       this.stats.castChosen[decision.primaryIndex - CAST_BASE]! += 1;
+    }
+    // Legal, and passed over. The only bucket balance cannot touch.
+    for (let slot = 0; slot < KIT_SLOTS; slot++) {
+      if (this.mask[CAST_BASE + slot] === 1 && decision.primaryIndex !== CAST_BASE + slot) {
+        this.stats.castDeclined[slot]! += 1;
+      }
     }
     if (
       decision.primaryIndex >= INVEST_BASE &&

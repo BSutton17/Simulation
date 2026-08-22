@@ -23,7 +23,13 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * Fingerprint of a fixed workload — winners, end ticks and placements across
  * every match, in plan order.
  *
- * Re-recorded 2026-08-22 for SHIELDS AT 300, down from 400. A cheaper shield
+ * Re-recorded 2026-08-22 for THE ECONOMY REBUILD — INCOME_PER_CITIZEN 0.06 ->
+ * 0.3, Water's kit cut 65%%, and Earthquake cut 65%%. Eight of sixteen kingdoms
+ * could not afford their own CHEAPEST ability before it; owned-and-used
+ * abilities went from 68 to 77 of 79 after. Every match outcome moves when
+ * the money does. Previous value: 3d644512e1d2d7be.
+ *
+ * Previously re-recorded 2026-08-22 for SHIELDS AT 300, down from 400. A cheaper shield
  * changes what every kingdom can afford and when, so purchase order and
  * therefore match outcomes move across the workload. Previous value:
  * b54418c2d2f01826.
@@ -65,7 +71,7 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * — but it must never change as a side effect of an optimisation. Re-record it
  * in the same commit as the intended change, and say why in the message.
  */
-const WORKLOAD_FINGERPRINT = "3d644512e1d2d7be";
+const WORKLOAD_FINGERPRINT = "23b54a8be3b7eb42";
 
 const SMALL = { duelPairings: 2, ffa4Compositions: 1, ffa7Compositions: 1 };
 

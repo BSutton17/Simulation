@@ -41,7 +41,17 @@ export const CITIZENS = {
 /** Economy tuning. */
 export const ECONOMY = {
   /** Money awarded per citizen, per tick (0.05 per tick = 1.00 per second at 20 ticks/sec). */
-  INCOME_PER_CITIZEN: 0.06,
+  // ⚠️ 0.06 -> 0.3, measured rather than chosen. At 0.06, EIGHT of sixteen
+  // kingdoms could not afford their own CHEAPEST ability at median holdings and
+  // the other eight sat at 0.65-0.94x of it — the price table was never
+  // reachable, which is why 13 of 16 never-cast abilities were never even
+  // bought.
+  //
+  // Swept over 100 matches with the trained champion: 0.12 leaves 4 kingdoms
+  // starved, 0.18 leaves 3, and 0.3 leaves 1. Above that it gets WORSE, not
+  // better — 0.5 starves 2 — because the extra income is spent rather than
+  // held, so the fix is not "more is better".
+  INCOME_PER_CITIZEN: 0.3,
   /** Base cost of the first purchased citizen. */
   CITIZEN_COST: 25,
   /**

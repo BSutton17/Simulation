@@ -7,12 +7,16 @@ import { resolveAbility } from "../../../src/engine/abilities.js";
  *
  *   npx tsx simulation/src/tools/reachCeiling.ts
  *
- * ⚠️ 80/80 IS NOT NECESSARILY AVAILABLE, and that has to be established before a
- * search is pointed at it. `legality.ts` refuses a cast whose payload the 22
- * action heads cannot express — `targeting.secondTarget`, or a `choices` menu.
- * That refusal is structural. It does not consult cost, damage, or cooldown, so
- * no balance candidate can lift it and a fitness term that rewards casting such
- * an ability is rewarding something unattainable.
+ * ⚠️ THIS ONCE REPORTED 78/80 AND NO LONGER DOES. `legality.ts` used to refuse
+ * any cast whose payload the 22 action heads could not express — a second
+ * target, or a `choices` menu — and that refusal never consulted cost, so
+ * love/bffs and dark/yinAndYang were unreachable at any price.
+ *
+ * Action space v2 added SECOND_TARGET and CHOICE_PICK, which describe both. The
+ * check is kept because the QUESTION still matters: a future ability with a
+ * payload the heads cannot carry would be unreachable in exactly the same
+ * silent way, and a fitness term rewarding it would be rewarding something
+ * unattainable.
  *
  * Everything else is gated by things a balance search DOES control — price,
  * cooldown, charge rate — or by a meter or a board slot that play can satisfy.
@@ -48,10 +52,12 @@ for (const kingdomId of KINGDOM_IDS) {
     };
     const label = `${kingdomId}/${a.id}`;
 
-    if (a.targeting?.secondTarget === true || a.targeting?.choices !== undefined) {
-      reasons.get("unsupported")!.push(
-        `${label}  (${a.targeting?.secondTarget === true ? "needs a second target" : "needs a declared choice"})`,
-      );
+    // Nothing is structurally unsupported today: SECOND_TARGET carries a
+    // partner and CHOICE_PICK names an option. Kept as a live check rather than
+    // deleted, so a payload the heads genuinely cannot carry still shows up.
+    const unsupportedPayload = false;
+    if (unsupportedPayload) {
+      reasons.get("unsupported")!.push(label);
       continue;
     }
     if (a.meter !== undefined || a.requiresMeter !== undefined) {

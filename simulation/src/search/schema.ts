@@ -272,22 +272,29 @@ const NEVER_CAST = new Set([
  * to fire, which is the shape the game actually wants.
  */
 const ABILITY_DIALS: Record<string, { suffix: string; type: ParameterType; label: string }[]> = {
+  // ⚠️ PRICES ARE FROZEN. `cost` and `unlockCost` were removed deliberately once
+  // the economy was fixed by measurement rather than by search.
+  //
+  // Raising INCOME_PER_CITIZEN from 0.06 to 0.3, plus targeted cuts to Water and
+  // Earthquake, took owned-and-used abilities from 68 to 77 of 79. Leaving
+  // prices searchable would let the optimiser undo that: a candidate can always
+  // buy a little parity by pricing an ability back out of reach, and the
+  // coverage floor only stops the extreme case.
+  //
+  // What remains is what the game should be balanced ON — how hard an ability
+  // hits, how often it can be used, and how long its effect lasts.
   attack: [
     { suffix: "effects.0.amount", type: "continuous", label: "damage" },
     { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
-    { suffix: "cost", type: "integer", label: "cost" },
-    { suffix: "unlockCost", type: "integer", label: "unlock price" },
   ],
   utility: [
     { suffix: "effects.0.durationTicks", type: "integer", label: "duration" },
-    { suffix: "cost", type: "integer", label: "cost" },
     { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
-    { suffix: "unlockCost", type: "integer", label: "unlock price" },
   ],
   ultimate: [
     { suffix: "cooldownTicks", type: "integer", label: "cooldown" },
-    { suffix: "cost", type: "integer", label: "cost" },
-    { suffix: "unlockCost", type: "integer", label: "unlock price" },
+    { suffix: "effects.0.amount", type: "continuous", label: "damage" },
+    { suffix: "effects.0.durationTicks", type: "integer", label: "duration" },
   ],
 };
 

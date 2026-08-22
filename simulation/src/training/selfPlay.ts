@@ -286,6 +286,12 @@ const emptyStats = (): ControllerStats => ({
   castBlockedNotUnlocked: [0, 0, 0, 0, 0],
   castBlockedNotAffordable: [0, 0, 0, 0, 0],
   castBlockedOther: [0, 0, 0, 0, 0],
+  castBlockedCooldown: [0, 0, 0, 0, 0],
+  castBlockedCharges: [0, 0, 0, 0, 0],
+  castBlockedMeter: [0, 0, 0, 0, 0],
+  castBlockedStatus: [0, 0, 0, 0, 0],
+  castBlockedNoTarget: [0, 0, 0, 0, 0],
+  castDeclined: [0, 0, 0, 0, 0],
   investAffordable: [0, 0, 0, 0, 0], investChosen: [0, 0, 0, 0, 0],
 });
 

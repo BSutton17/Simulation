@@ -136,22 +136,25 @@ test("fitness weights are untouched by this change", () => {
   assert.deepEqual(WEIGHT_PRESETS.designerPriority, { ffa4: 0.5, ffa7: 0.35, duel: 0.15 });
 });
 
-test("the ability-only search space covers acquisition as well as use", () => {
+test("the ability-only search space is damage, cooldown and duration", () => {
   const v2 = buildSchema({ scope: "expanded" });
   assert.equal(v2.version, "v2");
   const dims = searchable(v2);
 
-  // 248 = the previous 180 use-dials plus 68 unlock prices.
+  // 122 dials: damage, cooldown and duration. NO PRICES.
   //
-  // ⚠️ THE UNLOCK DIALS ARE THE POINT, and their absence is what defeated the
-  // last campaign. For 78 of 80 abilities the unlock price was DERIVED as
-  // ceil(cost/2), so the search could not make an ability affordable to ACQUIRE
-  // without also making it cheap to SPAM. 13 of 16 never-cast abilities turned
-  // out to be never BOUGHT — Earthquake's 350-gold unlock was affordable on
-  // zero of ~5,000 decisions against a median peak liquidity of 253.
-  assert.equal(dims.length, 248);
-  const unlocks = dims.filter((p) => p.id.endsWith(".unlockCost"));
-  assert.equal(unlocks.length, 68, "acquisition price must be searchable");
+  // ⚠️ COSTS ARE DELIBERATELY OUT OF THE SEARCH. The economy was fixed by
+  // measurement instead — income 0.06 -> 0.3, plus targeted cuts to Water and
+  // Earthquake — which took owned-and-used abilities from 68 to 77 of 79.
+  // Leaving prices searchable would let a candidate buy a little parity by
+  // pricing an ability back out of reach and quietly undo that; the coverage
+  // floor only catches the extreme case.
+  assert.equal(dims.length, 122);
+  assert.equal(
+    dims.filter((p) => p.id.endsWith(".cost") || p.id.endsWith(".unlockCost")).length,
+    0,
+    "prices are frozen and must not be searched",
+  );
   assert.ok(dims.every((p) => p.id.startsWith("ability.")), "abilities only");
   // The 20 curated passive/system dials must not have crept back in.
   for (const id of ["castle.repairCost", "shield.cost", "passive.nature.0.pct", "economy.incomePerCitizen"]) {
@@ -172,7 +175,9 @@ test("poisonApple's permanent-duration sentinel is no longer searched", () => {
     "the sentinel must not be a search dimension",
   );
   // Its real dials are still searched — only the sentinel is excluded.
-  assert.ok(dials.some((p) => p.id === "ability.poisonApple.cost"));
+  // `cost` is no longer among them: prices were FROZEN once the economy was
+  // fixed by measurement, so the search cannot price an ability back out of
+  // reach and undo it.
   assert.ok(dials.some((p) => p.id === "ability.poisonApple.cooldownTicks"));
   // And nothing else sentinel-valued crept in.
   assert.equal(dials.filter((p) => p.base >= 2 ** 40).length, 0);

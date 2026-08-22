@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Genome } from "../neat/index.js";
 
@@ -40,11 +40,29 @@ const checkpoint = JSON.parse(
 const read = (file: string): Champion =>
   JSON.parse(readFileSync(join(runDir, "champions", file), "utf8")) as Champion;
 
-// Weakest to strongest by the validation score each was crowned on.
+/**
+ * Weakest to strongest by the validation score each was crowned on.
+ *
+ * Discovered rather than named: a run does not know in advance which
+ * generations will produce champions, and a hardcoded list silently exports the
+ * wrong lineage — or nothing — the next time. Three are taken by spreading
+ * across the crowned set, so easy and hard are genuinely different policies
+ * rather than two checkpoints a few generations apart.
+ */
+const champions = readdirSync(join(runDir, "champions"))
+  .filter((f) => f.endsWith(".json"))
+  .map((file) => ({ file, ...(JSON.parse(readFileSync(join(runDir, "champions", file), "utf8")) as Champion) }))
+  .sort((a, b) => a.validation - b.validation);
+
+if (champions.length === 0) throw new Error(`no champions in ${runDir}/champions`);
+
+const at = (q: number): string =>
+  champions[Math.min(champions.length - 1, Math.round(q * (champions.length - 1)))]!.file;
+
 const ASSIGNMENT: Array<[string, string]> = [
-  ["easy", "gen0016-g16-10.json"],
-  ["medium", "gen0096-g96-18.json"],
-  ["hard", "gen0136-g136-n.json"],
+  ["easy", at(0)],
+  ["medium", at(0.5)],
+  ["hard", at(1)],
 ];
 
 mkdirSync(outDir, { recursive: true });

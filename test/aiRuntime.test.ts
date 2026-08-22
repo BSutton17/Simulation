@@ -141,20 +141,25 @@ test("different seeds produce different matches", () => {
 });
 
 test("the difficulty cadence changes how often a seat decides", () => {
-  const counts = (["hard", "medium", "easy"] as const).map((difficulty) => {
+  // ⚠️ DECISIONS PER TICK, not decisions. Each difficulty plays its own match
+  // and those matches do not last the same length — a weaker seat can drag a
+  // game out and accumulate MORE total decisions on a SLOWER cadence, which is
+  // exactly what happened when the economy changed and match lengths moved.
+  // The claim here is about rate, so rate is what is measured.
+  const rates = (["hard", "medium", "easy"] as const).map((difficulty) => {
     const { factory, stats } = trackingFactory(difficulty);
-    runHeadlessMatch({
+    const record = runHeadlessMatch({
       players: [{ kingdomId: "water" }, { kingdomId: "fire" }],
       seed: 9009,
       maxTicks: 4_000,
       createAI: factory,
       telemetry: false,
     });
-    return total(stats, "decisions");
+    return total(stats, "decisions") / Math.max(1, record.endedAtTick);
   });
-  const [hard, medium, easy] = counts as [number, number, number];
-  assert.ok(hard > medium, `hard ${hard} should decide more often than medium ${medium}`);
-  assert.ok(medium > easy, `medium ${medium} should decide more often than easy ${easy}`);
+  const [hard, medium, easy] = rates as [number, number, number];
+  assert.ok(hard > medium, `hard ${hard.toFixed(3)}/tick should decide more often than medium ${medium.toFixed(3)}`);
+  assert.ok(medium > easy, `medium ${medium.toFixed(3)}/tick should decide more often than easy ${easy.toFixed(3)}`);
 });
 
 test("a fully blocked seat waits instead of failing", () => {

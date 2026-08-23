@@ -24,7 +24,7 @@ export const ZAP: AbilityDefinition = {
   kind: "attack",
   cost: 53,
   unlockCost: 27,
-  cooldownTicks: Math.round(3 * TICK.RATE), // 3.5 s
+  cooldownTicks: Math.round(3 * TICK.RATE), // 60 ticks (3 s)
   targeting: { mode: "singleEnemy" },
   effects: [
     {
@@ -263,8 +263,23 @@ export const HACK: AbilityDefinition = {
   ],
 };
 
-/** Thundering Fate's window: while active, Zap arms no cooldown AND costs
- *  75% less (the price is floored to whole gold by the activation pipeline). */
+/** Thundering Fate's window: while active, Zap arms no cooldown AND costs 35%
+ *  less (the price is floored to whole gold by the activation pipeline). */
+/**
+ * How long Thundering Fate keeps Zap free of cooldown.
+ *
+ * THREE SECONDS, deliberately — short and explosive, not a long dump. The
+ * surrounding comments used to describe ten, which is a documentation bug and
+ * not a balance one; reading them as the spec is exactly how this got "fixed"
+ * to a value nobody wanted. The number here is the spec.
+ *
+ * Exported so the test can assert against it rather than carrying its own copy.
+ * The old assertion had `60` written into it, which means it would have agreed
+ * with any change made in the same edit — pinning behaviour, not a literal, is
+ * the point.
+ */
+export const THUNDERING_FATE_WINDOW_TICKS = 3 * TICK.RATE;
+
 export const THUNDERING_FATE_STATUS: StatusEffectDefinition = {
   id: "thunderingFate",
   name: "Thundering Fate",
@@ -273,20 +288,20 @@ export const THUNDERING_FATE_STATUS: StatusEffectDefinition = {
   modifiers: [
     // Per-ability cooldown stat (cooldowns.ts): x0 while the status lasts.
     { stat: "cooldown:zap", op: "mult", value: 0 },
-    // Per-ability price stat (activation pipeline): Zap costs a quarter.
+    // Per-ability price stat (activation pipeline): Zap costs 35% less.
     { stat: "abilityCost:zap", op: "mult", value: 0.65 },
   ],
 };
 
-/** Thundering Fate: ultimate — for 10 seconds Zap has no cooldown and costs
- *  75% less (rounded down). */
+/** Thundering Fate: ultimate — for 3 seconds Zap has no cooldown and costs 35%
+ *  less (rounded down). Five seconds at Lv1. */
 export const THUNDERING_FATE: AbilityDefinition = {
   id: "thunderingFate",
   name: "Thundering Fate",
   kind: "ultimate",
   cost: 503,
   unlockCost: 526,
-  cooldownTicks: Math.round(151.2 * TICK.RATE), // 252 s
+  cooldownTicks: Math.round(151.2 * TICK.RATE), // 3024 ticks (151.2 s)
   targeting: { mode: "self" },
   effects: [
     {
@@ -299,7 +314,7 @@ export const THUNDERING_FATE: AbilityDefinition = {
       // …and keep it clear for the window.
       type: "status",
       target: "self",
-      params: { status: THUNDERING_FATE_STATUS, durationTicks: 3 * TICK.RATE },
+      params: { status: THUNDERING_FATE_STATUS, durationTicks: THUNDERING_FATE_WINDOW_TICKS },
     },
   ],
   upgradePath: [
@@ -307,7 +322,7 @@ export const THUNDERING_FATE: AbilityDefinition = {
       level: 1,
       cost: 800,
       changes: {
-        effectParams: [null, { durationTicks: 5 * TICK.RATE }], // 10 s -> 12 s
+        effectParams: [null, { durationTicks: 5 * TICK.RATE }], // 3 s -> 5 s
       },
     },
     {

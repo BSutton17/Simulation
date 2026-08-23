@@ -19,7 +19,7 @@ export const CASTLE = {
   /** Maximum HP restored by a single repair action. */
   REPAIR_AMOUNT: 1000,
   /** Flat base cost of a repair (before growth scaling). */
-  REPAIR_COST: 500,
+  REPAIR_COST: 350,
   /**
    * Multiplicative cost growth per repair already purchased, so repeated
    * repairs get progressively more expensive (500 → 625 → 781).

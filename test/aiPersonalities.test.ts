@@ -373,11 +373,21 @@ test("opportunity cost: patience prioritizes high-impact plays over efficient sp
   // most gold-EFFICIENT one, so pure-tempo casting (patience 0) lets cheap
   // attacks crowd it out. A patient AI casts its big play first and holds for a
   // near-affordable finisher, so it uses ultimates far more.
-  const ultimates = (patience: number) => {
+  //
+  // ⚠️ POOLED ACROSS SEEDS, because the claim is about the POLICY and a single
+  // seed cannot carry it. This assertion used to run one seed ("impact") and
+  // compare the two counts directly. Measured across eight seeds, patience wins
+  // seven of them — often hugely, 79 ultimates to 35 — and "impact" is the one
+  // that goes the other way. So the mechanism is real and the old test was a
+  // coin flip on top of it: dropping the repair price to 350 gave the patient AI
+  // one more cheap thing to buy, that single seed crossed over, and a true claim
+  // started reporting failure.
+  const SEEDS = ["impact", "a", "b", "c"];
+  const ultimates = (patience: number, seed: string) => {
     let n = 0;
     runSimulation({
-      matches: 12,
-      seed: "impact",
+      matches: 6,
+      seed,
       players: ["water", "nature", "earth", "fire", "air"].map((k) => ({
         kingdomId: k as KingdomId,
         ai: personalityAI({ ...BALANCED, patience }),
@@ -392,11 +402,19 @@ test("opportunity cost: patience prioritizes high-impact plays over efficient sp
     });
     return n;
   };
-  const patient = ultimates(1);
-  const tempo = ultimates(0);
+  let patient = 0;
+  let tempo = 0;
+  for (const seed of SEEDS) {
+    patient += ultimates(1, seed);
+    tempo += ultimates(0, seed);
+  }
+  // Pooled margin measured at ~21%. Asserting only `>` would put the test back
+  // on the edge it just fell off, so this wants a gap big enough to mean
+  // something.
   assert.ok(
-    patient > tempo,
-    `expected patience to raise ultimate usage: patient ${patient} vs tempo ${tempo}`,
+    patient > tempo * 1.1,
+    `expected patience to raise ultimate usage across ${SEEDS.length} seeds: ` +
+      `patient ${patient} vs tempo ${tempo}`,
   );
 });
 

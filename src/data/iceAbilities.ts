@@ -206,7 +206,7 @@ export const FREEZE_TO_THE_CORE: AbilityDefinition = {
   id: "freezeToTheCore",
   name: "Freeze to the Core",
   kind: "attack",
-  cost: 472,
+  cost: 425,
   unlockCost: 236,
   cooldownTicks: Math.round(21 * TICK.RATE), // 15 s
   targeting: { mode: "singleEnemy" },

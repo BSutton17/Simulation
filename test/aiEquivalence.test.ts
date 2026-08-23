@@ -23,7 +23,14 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * Fingerprint of a fixed workload — winners, end ticks and placements across
  * every match, in plan order.
  *
- * Re-recorded 2026-08-22 for THE ECONOMY REBUILD — INCOME_PER_CITIZEN 0.06 ->
+ * Re-recorded 2026-08-23 for THE PRICE PASS — eight abilities the AI owned but
+ * could never afford to cast were cut until all eight were reachable
+ * (unlimitedRage -69%, thunderingFate -52%, lightShow -41%, caprice and
+ * brickWall -34%, earthquake -27%, freezeToTheCore and infected -10%).
+ * Owned-and-used went 70 to 73. Every match outcome moves when a price does.
+ * Previous value: 23b54a8be3b7eb42.
+ *
+ * Previously re-recorded 2026-08-22 for THE ECONOMY REBUILD — INCOME_PER_CITIZEN 0.06 ->
  * 0.3, Water's kit cut 65%%, and Earthquake cut 65%%. Eight of sixteen kingdoms
  * could not afford their own CHEAPEST ability before it; owned-and-used
  * abilities went from 68 to 77 of 79 after. Every match outcome moves when
@@ -71,7 +78,7 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * — but it must never change as a side effect of an optimisation. Re-record it
  * in the same commit as the intended change, and say why in the message.
  */
-const WORKLOAD_FINGERPRINT = "23b54a8be3b7eb42";
+const WORKLOAD_FINGERPRINT = "e83dcd6ace1710d0";
 
 const SMALL = { duelPairings: 2, ffa4Compositions: 1, ffa7Compositions: 1 };
 

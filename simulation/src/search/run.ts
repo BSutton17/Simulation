@@ -728,13 +728,22 @@ export async function runSearch(config: SearchConfig = {}): Promise<SearchResult
       bestCandidateId: bestFull?.candidate.id ?? null,
       durationMs: performance.now() - genStarted,
     });
+    // ⚠️ NAMES THE LEADER, not just its score. `bestFull` is the best candidate
+    // across the WHOLE run so far, and it can sit unchanged for many
+    // generations — which reads as a stalled search when it is really a search
+    // that has not beaten itself yet. Printing the id makes the difference
+    // visible at a glance, and gives something to look up in the artifacts
+    // without waiting for the run to finish.
+    const leader = bestFull
+      ? `${rankOf(bestFull).toFixed(4)} (${bestFull.candidate.id}, ${bestFull.candidate.hash})`
+      : "—";
     config.onProgress?.({
       kind: "generation",
       generation: g,
       message:
         `gen ${g + 1}/${generations}  screen best ${Math.max(...scores).toFixed(4)}  ` +
         `mean ${(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(4)}  ` +
-        `full best ${bestFull ? rankOf(bestFull).toFixed(4) : "—"}`,
+        `BEST SO FAR ${leader}`,
     });
 
     // Written AFTER the generation is fully accounted for, so a checkpoint

@@ -30,6 +30,10 @@ import type { PlayerSpec } from "../types.js";
  */
 
 const [, , modelPath] = process.argv;
+/** Emits the price-fixable list as JSON, for the automated cut loop. */
+const jsonOut = process.argv.includes("--json")
+  ? process.argv[process.argv.indexOf("--json") + 1]
+  : null;
 if (!modelPath) {
   console.error("usage: whyUnused <champion.json>");
   process.exit(1);
@@ -173,3 +177,25 @@ console.log(
       : "AVAILABILITY. Most idle abilities were never castable in the first place."
   }`,
 );
+
+
+// ── machine-readable, for scripts/pricePass.mjs ─────────────────────────────
+//
+// Only the CANNOT-AFFORD list. A declined ability is one the policy judged and
+// passed over, and discounting it chases a price downward forever without ever
+// addressing the judgement — so it is deliberately excluded from anything that
+// automatically cuts prices.
+if (jsonOut) {
+  const { writeFileSync } = await import("node:fs");
+  const cannotAfford = idle
+    .filter(([, r]) => r.legal === 0 && r.cannotAfford >= r.cooldown &&
+      r.cannotAfford >= r.meter && r.cannotAfford >= r.status)
+    .map(([id]) => id.split("/")[1]!);
+  const declined = idle.filter(([, r]) => r.legal > 0).map(([id]) => id);
+  writeFileSync(
+    jsonOut,
+    JSON.stringify({ used: used.length, idle: idle.length, cannotAfford, declined }, null, 2),
+  );
+  console.log(`
+  wrote ${jsonOut}`);
+}

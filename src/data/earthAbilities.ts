@@ -118,7 +118,7 @@ export const EARTHQUAKE: AbilityDefinition = {
   id: "earthquake",
   name: "Earthquake",
   kind: "attack",
-  cost: 699,
+  cost: 509,
   unlockCost: 350,
   cooldownTicks: Math.round(18.15 * TICK.RATE), // 17.75 s
   targeting: { mode: "singleEnemy" },
@@ -245,7 +245,7 @@ export const BRICK_WALL: AbilityDefinition = {
   id: "brickWall",
   name: "Brick Wall",
   kind: "ultimate",
-  cost: 545,
+  cost: 358,
   unlockCost: 273,
   cooldownTicks: Math.round(139.3 * TICK.RATE), // 99.5 s
   targeting: { mode: "self" },

@@ -191,7 +191,7 @@ export const INFECTED: AbilityDefinition = {
   id: "infected",
   name: "Infected",
   kind: "attack",
-  cost: 532,
+  cost: 479,
   unlockCost: 266,
   cooldownTicks: Math.round(10.5 * TICK.RATE), // 17.5 s
   targeting: { mode: "singleEnemy" },
@@ -283,7 +283,7 @@ export const CAPRICE: AbilityDefinition = {
   id: "caprice",
   name: "Caprice",
   kind: "ultimate",
-  cost: 735,
+  cost: 482,
   unlockCost: 368,
   cooldownTicks: Math.round(97.8 * TICK.RATE), // 163 s
   targeting: { mode: "self" },

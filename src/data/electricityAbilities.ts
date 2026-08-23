@@ -284,7 +284,7 @@ export const THUNDERING_FATE: AbilityDefinition = {
   id: "thunderingFate",
   name: "Thundering Fate",
   kind: "ultimate",
-  cost: 1052,
+  cost: 503,
   unlockCost: 526,
   cooldownTicks: Math.round(151.2 * TICK.RATE), // 252 s
   targeting: { mode: "self" },

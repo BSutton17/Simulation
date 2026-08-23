@@ -154,7 +154,7 @@ export const UNLIMITED_RAGE: AbilityDefinition = {
   id: "unlimitedRage",
   name: "Unlimited Rage",
   kind: "attack",
-  cost: 600,
+  cost: 188,
   unlockCost: 300,
   cooldownTicks: 60 * TICK.RATE, // 60 s
   targeting: { mode: "singleEnemy" },

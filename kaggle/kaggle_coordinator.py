@@ -44,7 +44,7 @@ BRANCH = "main"
 # What remains is what the game should be balanced ON: damage, cooldown and
 # effect duration.
 SCOPE = "expanded"
-GENERATIONS = 250
+GENERATIONS = 25
 SEED = 20260813
 SIGMA = 0.2
 PROMOTE = 1
@@ -71,15 +71,16 @@ ALLOCATION = "v2"
 #   - the search space itself is different: 248 dimensions down to 122, with
 #     prices frozen.
 #
-# ⚠️ IT ALSO HAS A REAL IMBALANCE TO FIX, not just polish. Fixing starvation
-# buffed Fire hardest because it was the most starved — its median holding went
-# 9 to 282 — and Water now loses every match against it. This run is the repair.
+# The income experiment that the previous name referred to was REVERTED —
+# INCOME_PER_CITIZEN is back to 0.06 — so the name no longer mentions it. Prices
+# were settled separately by measurement and are frozen out of the search; what
+# remains is damage, cooldown and duration.
 #
 # The coordinator ALSO refuses to resume an experiment whose identity does not
 # match this build and starts an identity-qualified one instead, so a stale name
 # here is caught rather than silently obeyed. This constant only decides what
 # the run is CALLED.
-EXPERIMENT_NAME = "elementals-balance-v6-economy-s20260822"
+EXPERIMENT_NAME = "elementals-damage-cooldown-s20260823"
 
 # The checkpoint now lives in Supabase (table `checkpoints`), not in a Kaggle
 # Dataset. /kaggle/working is deleted when a session ends, which is how the

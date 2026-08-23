@@ -17,7 +17,7 @@ import { PLAYSTYLES, comboProgress, spamPenalty } from "./playstyle.js";
  * becomes something nobody can reason about and a policy learns to farm.
  */
 
-export const AI_FITNESS_VERSION = "v5";
+export const AI_FITNESS_VERSION = "v6";
 
 /** Everything one evaluation match produced. Kept whole, not reduced to a number. */
 export interface ScenarioResult {
@@ -405,6 +405,11 @@ export function scoreScenario(
     // the seat got, so two steps of Fire's five already pay. A genome cannot
     // learn a five-cast sequence that only rewards completion — there is
     // nothing to climb toward.
+    //
+    // ⚠️ TWO steps, not one, and squared — see `comboProgress`. Paying for a
+    // single step meant one Heat Wave banked a fifth of this reward for the
+    // whole match and the follow-up was never required, so the cheapest way to
+    // hold the credit was to open the combo and abandon it.
     //
     // Earth is the exception the data forces: its intent is the SHIELD, not a
     // cast sequence, so buying one is what scores.

@@ -104,11 +104,33 @@ export const PLAYSTYLES: Record<KingdomId, Playstyle> = {
 };
 
 /**
- * How far along its line a seat got, as a fraction in [0,1].
+ * How far along its line a seat got, as a credit in [0,1].
  *
  * Subsequence matching, restarting on each fresh attempt: the best run through
  * the line anywhere in the match is what counts. Reacting to the board between
  * steps must not void the attempt.
+ *
+ * ⚠️ ONE STEP IS NOT PROGRESS, and paying for it was a free lunch that
+ * actively taught the wrong habit. Fire's line opens with Heat Wave, so a
+ * SINGLE cast of it set `best = 1` and banked 1/5 of the combo reward for the
+ * rest of the match — permanently, since `best` is a maximum — with no
+ * obligation to ever cast the other four. The cheapest way to hold that credit
+ * was to open with Heat Wave and never follow up, which is exactly the
+ * behaviour that showed up in play.
+ *
+ * So credit starts at TWO steps, or at completion for the short lines (Space's
+ * is a single ultimate, and demanding two of it would make it unscoreable).
+ *
+ * ⚠️ AND IT IS SQUARED, so finishing beats half-finishing by more than
+ * proportion. Linear credit paid 20% of the reward for 20% of the line while
+ * the remaining steps cost far more than the first — the gradient pointed at
+ * starting combos, not completing them. Squared, each step is worth more than
+ * the one before it:
+ *
+ *   Fire (5 steps):  1 -> 0.00   2 -> 0.16   3 -> 0.36   4 -> 0.64   5 -> 1.00
+ *
+ * The gradient the partial credit exists to provide is still there; what is
+ * gone is the part that paid without asking for the follow-up.
  */
 export function comboProgress(
   kingdomId: KingdomId,
@@ -133,7 +155,12 @@ export function comboProgress(
       if (step === style.sequence.length) step = 0; // completed; allow another run
     }
   }
-  return best / style.sequence.length;
+  // Below the floor there is no credit at all; at or above it the fraction is
+  // squared so completion dominates.
+  const floor = Math.min(2, style.sequence.length);
+  if (best < floor) return 0;
+  const progress = best / style.sequence.length;
+  return progress * progress;
 }
 
 /** How many times the full line was completed. */

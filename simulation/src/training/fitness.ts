@@ -17,7 +17,7 @@ import { PLAYSTYLES, comboProgress, spamPenalty } from "./playstyle.js";
  * becomes something nobody can reason about and a policy learns to farm.
  */
 
-export const AI_FITNESS_VERSION = "v6";
+export const AI_FITNESS_VERSION = "v7";
 
 /** Everything one evaluation match produced. Kept whole, not reduced to a number. */
 export interface ScenarioResult {
@@ -425,18 +425,32 @@ export function scoreScenario(
     ultimate: context.behaviour.ultimateCasts > 0 ? config.ultimateWeight : 0,
     // Reacting to what the board announced. Saturating, so one good read pays
     // most of the term and a genome cannot farm it by hoarding shields.
-    // Three reads, each saturating on its own before they are combined, so the
+    // Four reads, each saturating on its own before they are combined, so the
     // term rewards RECOGNISING a situation rather than repeating one. A genome
     // that only ever learns the Light Show read still earns its share.
+    //
+    // ⚠️ THE DEBT SHARE IS WHY THE DEFENSIVE HEADS CAN BE LEARNED AT ALL.
+    // Answering a spin, a bet or a swarm spends a decision immediately, while
+    // the payoff — an income that keeps running — is indirect and arrives
+    // later. With nothing paying for it the gradient pointed away from
+    // defending at every single moment, so a genome that started using the
+    // heads was punished now and repaid only maybe, much later. The heads were
+    // added in one run and went completely unused; this is the term that was
+    // missing, not more generations.
     defense:
       config.defenseWeight *
       Math.min(
         1,
-        Math.min(1, context.combat.shieldedVsLightShow) * 0.4 +
-          Math.min(1, context.combat.volcanoShare) * 0.4 +
+        Math.min(1, context.combat.shieldedVsLightShow) * 0.3 +
+          Math.min(1, context.combat.volcanoShare) * 0.3 +
           // Old Friends has no clock and no ransom: a shield is the only exit
           // the game offers, so lifting a siege is a read, not a purchase.
-          Math.min(1, context.combat.siegesLifted) * 0.2,
+          Math.min(1, context.combat.siegesLifted) * 0.15 +
+          // PROMPTNESS, not count. Roulette and the Slot Machine freeze gold
+          // production until answered, so the length of the freeze is the
+          // damage; paying per answer would score clearing a debt instantly
+          // and sitting on it half the match the same.
+          Math.min(1, context.combat.debtPromptness) * 0.25,
       ),
     // Negative. Subtracted below rather than added.
     spam: -Math.min(

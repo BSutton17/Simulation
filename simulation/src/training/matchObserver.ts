@@ -40,6 +40,15 @@ const SPAM_EXEMPT_STATUSES = new Set(["thunderingFate"]);
  */
 const SHIELD_ENDED_STATUSES = new Set(["oldFriends"]);
 
+/**
+ * How long a frozen-income debt may sit before answering it is worth nothing.
+ *
+ * Ten seconds at 20 ticks/s. Long enough that a seat mid-combo is not punished
+ * for finishing the cast it was already making, short enough that ignoring the
+ * machine for half a match earns no credit at all.
+ */
+const DEBT_PATIENCE = 10 * 20;
+
 export interface SeatCombat {
   /**
    * Successful ability activations by this seat.
@@ -111,6 +120,25 @@ export interface SeatCombat {
    * recognising that the usual option of riding a debuff out does not exist.
    */
   siegesLifted: number;
+  /**
+   * Frozen-income debts this seat cleared, and how quickly.
+   *
+   * ⚠️ THE CAPABILITY EXISTED WITH NOTHING PAYING FOR IT. Answering a spin,
+   * a bet or a swarm COSTS a decision immediately, while the benefit — an
+   * income that keeps running — is indirect and arrives later. With no term
+   * for it, the gradient pointed away from defending at every moment, so a
+   * genome that started answering the casino was punished now and repaid
+   * only maybe, much later. That is a valley evolution does not cross, and
+   * the heads would have stayed dead however many generations were spent.
+   *
+   * SPEED IS THE MEASURE, not the count. Roulette and the Slot Machine freeze
+   * gold production until they are answered, so what matters is how long the
+   * freeze lasted — counting answers alone would pay the same for clearing a
+   * debt instantly and for sitting on it half the match.
+   */
+  debtsCleared: number;
+  /** Summed promptness of those clears, each in [0,1]. */
+  debtPromptness: number;
   /** Damage this seat dealt to a volcano. */
   volcanoDamage: number;
   /** Share of the volcano's health this seat removed, once it was broken. */
@@ -130,6 +158,8 @@ function empty(): SeatCombat {
     healingReceived: 0,
     shieldedVsLightShow: 0,
     siegesLifted: 0,
+    debtsCleared: 0,
+    debtPromptness: 0,
     volcanoDamage: 0,
     volcanoShare: 0,
   };
@@ -166,6 +196,8 @@ export class CombatObserver implements SimulationObserver {
   private readonly shielded = new Set<string>();
   /** Seats currently under a siege only a shield can lift. */
   private readonly besieged = new Set<string>();
+  /** When each frozen-income debt was opened, so its clear can be timed. */
+  private readonly debtOpenedAt = new Map<string, number>();
   /** Volcano damage by attacker, resolved into shares when it breaks. */
   private readonly volcanoHits = new Map<string, number>();
 
@@ -192,6 +224,42 @@ export class CombatObserver implements SimulationObserver {
           for (const id of this.shielded) {
             if (id !== event.casterId) this.seat(id).shieldedVsLightShow += 1;
           }
+        }
+        break;
+      }
+      // ── frozen-income debts ──────────────────────────────────
+      //
+      // Opened when the machine lands, closed when the seat answers. The gap
+      // between the two IS the damage the ability does, so the gap is what is
+      // scored.
+      case "slotMachineOpened":
+      case "rouletteOpened": {
+        this.debtOpenedAt.set(event.playerId, event.tick);
+        break;
+      }
+      case "slotSpun":
+      case "rouletteSettled": {
+        const opened = this.debtOpenedAt.get(event.playerId);
+        if (opened !== undefined) {
+          this.debtOpenedAt.delete(event.playerId);
+          const seat = this.seat(event.playerId);
+          seat.debtsCleared += 1;
+          // Full credit for answering at once, decaying to nothing over
+          // DEBT_PATIENCE. A seat that pulls the lever immediately keeps its
+          // whole economy; one that waits ten seconds has already paid.
+          const waited = Math.max(0, event.tick - opened);
+          seat.debtPromptness += Math.max(0, 1 - waited / DEBT_PATIENCE);
+        }
+        break;
+      }
+      case "crawlerSquashed": {
+        // No open/close pair to time: each click is its own act, and the swarm
+        // only stops draining when a bug actually DIES. So kills are what
+        // count, and a click that finishes one is worth full credit.
+        if (event.killed) {
+          const seat = this.seat(event.playerId);
+          seat.debtsCleared += 1;
+          seat.debtPromptness += 1;
         }
         break;
       }

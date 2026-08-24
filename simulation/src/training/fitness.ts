@@ -17,7 +17,7 @@ import { PLAYSTYLES, comboProgress, spamPenalty } from "./playstyle.js";
  * becomes something nobody can reason about and a policy learns to farm.
  */
 
-export const AI_FITNESS_VERSION = "v8";
+export const AI_FITNESS_VERSION = "v9";
 
 /** Everything one evaluation match produced. Kept whole, not reduced to a number. */
 export interface ScenarioResult {
@@ -241,7 +241,7 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // ability (Dark, Kitsune, Love) from collapsing onto one cast.
   //
   // was 0.20
-  placementWeight: 0.12,
+  placementWeight: 0.1,
   // was 0.10
   survivalWeight: 0.06,
   // was 0.10
@@ -250,7 +250,7 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   inactivityScore: 0,
   // Deliberately smaller than every other term: it exists to leave the
   // do-nothing basin, not to compete with winning.
-  activityWeight: 0.05,
+  activityWeight: 0.04,
   activityTarget: 20,
   // ⚠️ WINNING MUST REMAIN THE TOP PRIORITY, and that is an arithmetic property
   // rather than an intention: every non-win term sums to 0.84, which is less
@@ -260,8 +260,8 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // raising variety alone would have totalled 1.04 and inverted the rule.
   varietyWeight: 0.1,
   comboWeight: 0.25,
-  ultimateWeight: 0.15,
-  defenseWeight: 0.06,
+  ultimateWeight: 0.19,
+  defenseWeight: 0.11,
   // Applied per repeat-run via `repeatPenaltyFor`, then capped.
   spamWeight: 0.06,
   // ⚠️ CAPPED ON PURPOSE. An uncapped escalating penalty makes casting nothing
@@ -269,7 +269,7 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // failure mode. The cap keeps spam strictly worse than varied play without
   // making silence attractive.
   spamCap: 0.45,
-  resourceWeight: 0.04,
+  resourceWeight: 0.03,
   resourceTarget: 3,
 };
 

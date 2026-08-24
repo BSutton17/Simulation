@@ -83,7 +83,7 @@ function context(
     seats: 2,
     kingdom: "water",
     seat: 0,
-    combat: { casts: 20, abilitiesUsed: new Set(["waterBall", "waterfall"]), castSequence: ["waterBall", "waterfall"], exemptCasts: new Set<number>(), damageDealt: 5_000, damageReceived: 5_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0, shieldedVsLightShow: 0, volcanoDamage: 0, volcanoShare: 0 },
+    combat: { casts: 20, abilitiesUsed: new Set(["waterBall", "waterfall"]), castSequence: ["waterBall", "waterfall"], exemptCasts: new Set<number>(), damageDealt: 5_000, damageReceived: 5_000, shieldAbsorbed: 0, kills: 1, healingReceived: 0, shieldedVsLightShow: 0, volcanoDamage: 0, volcanoShare: 0, siegesLifted: 0, debtsCleared: 0, debtPromptness: 0 },
     // A default that is neither spammy nor a combo, so a test that cares about
     // one of those states it explicitly rather than inheriting it.
     behaviour: { casts: 20, invests: 3, citizens: 5, repairs: 1, shields: 1, retargets: 2, waits: 10, decisions: 100, forcedWaits: 0, distinctAbilities: 2, kitSize: 5, castSequence: ["waterBall", "waterfall"], exemptCasts: new Set<number>(), ultimateCasts: 0 },
@@ -732,16 +732,39 @@ test("v4: a candidate that wins meaningfully less is refused the title", async (
 });
 
 test("v4: the guard tolerates more noise when it has measured less", async () => {
-  // The band is sqrt(0.25/n), so it must WIDEN as the sample shrinks —
-  // otherwise a short validation slate would reject successors at random.
-  const drop = 0.53 - 0.45;
-  assert.ok(
-    !championWouldRegress(0.45, 16, 0.53),
-    `over 16 matches an ${drop.toFixed(2)} gap is inside the noise band`,
-  );
+  // The band scales with sqrt(0.25/n), so it must WIDEN as the sample shrinks —
+  // otherwise a short validation slate would reject successors at random. The
+  // PROPERTY is what matters here, not the constant in front of it.
+  const bandAt = (n: number): number => {
+    // Smallest drop this sample size still calls a regression.
+    for (let d = 0; d <= 0.5; d += 0.0005) {
+      if (championWouldRegress(0.6 - d, n, 0.6)) return d;
+    }
+    return 0.5;
+  };
+  assert.ok(bandAt(16) > bandAt(48), "16 matches must tolerate more than 48");
+  assert.ok(bandAt(48) > bandAt(400), "48 matches must tolerate more than 400");
   assert.ok(
     championWouldRegress(0.45, 400, 0.53),
-    "but over 400 matches the same gap is a real regression",
+    "over 400 matches an 0.08 gap is a real regression",
+  );
+});
+
+test("v4: the band is tight enough to catch the regression that got through", async () => {
+  // ⚠️ THE REASON THE CONSTANT IS HALF A STANDARD ERROR. At a full SE the band
+  // over the 48-match validation slate is 7.2 percentage points, which is wider
+  // than any regression this guard has ever needed to stop. The champion that
+  // shipped was crowned at 64.6% against an incumbent 68.8% — a 4.2 point drop
+  // — and passed without comment, four times in a row.
+  assert.ok(
+    championWouldRegress(0.646, 48, 0.688),
+    "a 4.2 point drop over the validation slate must be refused",
+  );
+  // And still not so tight that ordinary sampling noise blocks everything: a
+  // drop well inside one standard error of 48 matches is allowed through.
+  assert.ok(
+    !championWouldRegress(0.678, 48, 0.688),
+    "a 1 point drop over 48 matches is noise, not a regression",
   );
 });
 

@@ -17,7 +17,7 @@ import { PLAYSTYLES, comboProgress, spamPenalty } from "./playstyle.js";
  * becomes something nobody can reason about and a policy learns to farm.
  */
 
-export const AI_FITNESS_VERSION = "v7";
+export const AI_FITNESS_VERSION = "v8";
 
 /** Everything one evaluation match produced. Kept whole, not reduced to a number. */
 export interface ScenarioResult {
@@ -484,7 +484,21 @@ export function scoreScenario(
     score = config.inactivityScore;
     terms.guard = 0;
     terms.guardReason = "never cast";
-  } else if (record.timedOut && score > config.timeoutCap) {
+  } else if (record.timedOut) {
+    // ⚠️ EVERY TIMEOUT, NOT ONLY THE ONES ALREADY ABOVE THE CAP.
+    //
+    // The condition used to be `score > config.timeoutCap`, which left a cliff
+    // exactly at the cap: a stalemate scoring 0.2499 kept all of it, while one
+    // scoring 0.2501 collapsed to 0.0331 — seven and a half times smaller for
+    // two ten-thousandths more raw score. Everything from the cap up to the
+    // 1.89 ceiling therefore ranked BELOW anything just under the cap, so the
+    // whole well-played range lost to barely playing at all.
+    //
+    // That inverts the exact ordering this branch exists to preserve, and it
+    // selects for doing less in any configuration where matches routinely
+    // stalemate — which is where cast volume, and with it win rate, goes.
+    // Scaling every timeout by the same factor is monotonic: better play always
+    // scores better, and the ceiling still lands precisely on the cap.
     // SQUASHED PROPORTIONALLY, not clamped to a constant.
     //
     // Clamping made every timed-out match score EXACTLY the cap, so all

@@ -82,6 +82,14 @@ export interface TrainingCheckpoint {
   /** The champion's score on the frozen slate — what it was chosen by. */
   championValidation: number | null;
   /**
+   * The best validated win rate this run has reached.
+   *
+   * Carried for the same reason `championValidation` is: without it a resumed
+   * run has no bar, so the first validation after every resume is unguarded and
+   * can crown something worse than the run had already achieved.
+   */
+  championWinRate: number | null;
+  /**
    * The Hall of Fame, and the id last admitted to it.
    *
    * Carried because under self-play the Hall is part of the ENVIRONMENT, not

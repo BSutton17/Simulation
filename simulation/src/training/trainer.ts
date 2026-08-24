@@ -64,7 +64,11 @@ export function championWouldRegress(
 ): boolean {
   if (incumbentWinRate === null) return false;
   if (matches <= 0) return false;
-  const noise = Math.sqrt(0.25 / matches);
+  // Half the standard error rather than a full one. A full SE at 48 matches is
+  // 7.2 percentage points, which waves through drops far larger than anything
+  // this guard was written to stop; the measured champion lost 4.2 points at
+  // the moment it was crowned and passed comfortably.
+  const noise = 0.5 * Math.sqrt(0.25 / matches);
   return candidateWinRate < incumbentWinRate - noise;
 }
 
@@ -219,6 +223,7 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
   let restoredHall: { genome: Genome; generation: number }[] | null = null;
   let restoredLastAdmitted: string | null = null;
   let restoredChampionValidation: number | null = null;
+  let restoredChampionWinRate: number | null = null;
   let startGeneration = 0;
   let resumedFrom: number | null = null;
   let checkpointRejected: string | null = null;
@@ -236,6 +241,9 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
       restoredHall = load.checkpoint.hallOfFame ?? null;
       restoredLastAdmitted = load.checkpoint.lastAdmitted ?? null;
       restoredChampionValidation = load.checkpoint.championValidation ?? null;
+      // Without this a resumed run starts with no bar at all, so the first
+      // validation after every resume is unguarded.
+      restoredChampionWinRate = load.checkpoint.championWinRate ?? null;
     } else {
       population = new Population(ELEMENTALS_SHAPE, config.neat, config.seed, options.warmSeeds);
     }
@@ -323,7 +331,19 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
    * validation slate — sqrt(0.25/n) — so ordinary sampling noise does not block
    * a genuine improvement, while a systematic slide does.
    */
-  let championWinRate: number | null = null;
+  // ⚠️ A HIGH-WATER MARK, NOT THE CURRENT CHAMPION'S RATE.
+  //
+  // This used to be reassigned to each new champion's win rate, which moved the
+  // bar DOWN every time a slightly-worse champion was crowned. Each individual
+  // step passed the guard — none of them regressed by more than the tolerance
+  // — while the chain as a whole walked steadily downhill. Four promotions took
+  // the measured win rate from 71.5% to 66.7% without a single one being
+  // refused, because after each one the thing being protected was the new,
+  // lower number.
+  //
+  // Anchored to the BEST rate ever validated, the tolerance is spent once
+  // rather than once per promotion.
+  let championWinRate: number | null = restoredChampionWinRate;
   // Only populated when the champion is found in THIS session: the per-scenario
   // detail is far too large to carry in a checkpoint, and the genome is what a
   // model actually needs.
@@ -505,7 +525,12 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
           championValidation = bestResult.fitness;
           championGeneration = generation;
           championResult = bestResult;
-          championWinRate = candidateWinRate;
+          // Raise the mark, never lower it: the bar is the best this run has
+          // ever proven it can do.
+          championWinRate =
+            championWinRate === null
+              ? candidateWinRate
+              : Math.max(championWinRate, candidateWinRate);
           options.onChampion?.(snapshot, generation, bestResult.fitness);
         }
       }
@@ -604,6 +629,7 @@ export async function train(options: TrainOptions): Promise<TrainingRunResult> {
         champion,
         championGeneration,
         championValidation,
+        championWinRate,
         hallOfFame: hallOfFame.toJSON(),
         lastAdmitted,
       } satisfies TrainingCheckpoint);

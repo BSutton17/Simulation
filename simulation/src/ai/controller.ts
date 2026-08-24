@@ -364,7 +364,17 @@ export class NetworkController implements AIController {
     //
     // Ordered ransom-first because a firefly swarm also bars a shield, so it
     // gates a defensive option the other two do not.
-    if (decision.dispel && knowledge.self.dispel !== null) {
+    // ⚠️ AFFORDABILITY IS CHECKED HERE, NOT LEFT TO THE ENGINE TO REFUSE.
+    // The gate defaults OPEN, so a seat under a swarm it cannot pay for would
+    // otherwise attempt the ransom on every single decision and be refused
+    // every time — 27 rejections in one joker-vs-light match. A rejected
+    // action is a wasted decision and it teaches the policy nothing except
+    // that the slot is broken.
+    if (
+      decision.dispel &&
+      knowledge.self.dispel !== null &&
+      knowledge.self.currency >= knowledge.self.dispel.cost
+    ) {
       const result = dispelStatus(match, player);
       if (result.ok) {
         this.stats.dispels += 1;

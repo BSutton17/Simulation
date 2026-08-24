@@ -91,12 +91,18 @@ test("a bot pulls the lever, places a bet, and swats a bug", async () => {
   const { ACTION_SIZE, DEFEND_GATE } = await import("../simulation/src/ai/actions.js");
 
   // A network is irrelevant here — what matters is that the controller CAN
-  // reach these engine calls. So the decision is forced by stubbing the
-  // network to hold DEFEND_GATE open and everything else shut.
+  // reach these engine calls.
+  //
+  // ⚠️ THE GATE IS SUPPRESSION, so an UNWIRED head (raw 0, squash 0.5) means
+  // DEFEND. This stub therefore leaves the head at its neutral value rather
+  // than driving it high; driving it high is how you turn defending OFF. The
+  // earlier version of this test pushed it to +10 and, once the head was
+  // inverted, was asserting that a bot which had been told to stand down
+  // pulled the lever anyway.
   const forced = {
     activate: (_inputs: Float32Array, out: Float32Array) => {
       out.fill(-10);
-      out[DEFEND_GATE] = 10;
+      out[DEFEND_GATE] = 0;
     },
   };
 

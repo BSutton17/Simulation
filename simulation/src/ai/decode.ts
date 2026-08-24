@@ -168,9 +168,27 @@ export function decide(
     // primary head chose, and `controller.ts` ignores them for abilities that
     // do not take that payload. Masking them per-ability would need the mask to
     // know which slot is about to be chosen, which it does not.
-    defend: squash(outputs[DEFEND_GATE]!) > 0.5,
+    // ⚠️ THESE READ AS SUPPRESSION, NOT PERMISSION, AND THE DIRECTION IS THE
+    // WHOLE REASON THEY WORK AT ALL.
+    //
+    // An APPENDED output has no incoming connections, so it emits 0, and
+    // `squash(0)` is exactly 0.5. Tested as `> 0.5` that is FALSE — the head
+    // sits precisely on its own threshold and reads as off, forever. Measured
+    // after a 300-generation run: zero connections into either gate, the raw
+    // output 0.0000 for every input, and not one debt answered in 288 matches
+    // while 45 were opened. Evolution had to wire the head AND give it a
+    // positive weight before the behaviour could ever appear, but the reward
+    // for the behaviour could only pay once it did. Nothing could start.
+    //
+    // Inverted, the default becomes the CORRECT one. Roulette and the Slot
+    // Machine freeze gold production until answered and a swarm ticks damage
+    // while barring a shield, so acting is almost always right and doing
+    // nothing is the unusual choice. A fresh head defends immediately, and
+    // evolution learns when to hold off — which is a refinement it can climb
+    // toward, rather than a cliff it has to leap.
+    defend: squash(outputs[DEFEND_GATE]!) <= 0.5,
     betPick: squash(outputs[BET_PICK]!),
-    dispel: squash(outputs[DISPEL_GATE]!) > 0.5,
+    dispel: squash(outputs[DISPEL_GATE]!) <= 0.5,
     spread: squash(outputs[SPREAD_GATE]!) > 0.5,
     secondTargetPick: squash(outputs[SECOND_TARGET]!),
     choicePick: squash(outputs[CHOICE_PICK]!),

@@ -149,6 +149,28 @@ const ffaFirst = (r: typeof A.ffa4) => KINGDOM_IDS.map((k) => 100 * (r!.kingdoms
 const ffaPlace = (r: typeof A.ffa4) => KINGDOM_IDS.map((k) => r!.kingdoms[k]?.placement.average ?? 0);
 
 console.log(`\nmatches ${A.totals.matches} per side   timeouts ${A.totals.timeouts} -> ${B.totals.timeouts}`);
+// ⚠️ ZERO MATCHES IS NOT A RESULT, AND IT LOOKS EXACTLY LIKE A PERFECT ONE.
+//
+// When the evaluator cannot load a model — `assertModelCompatible` refuses a
+// set whose observation or action version does not match this build — every
+// match silently fails to run, every rate comes back 0, and the report prints
+// "+0.0000 (+0.0%)" down the whole parity table with all sixteen kingdoms at
+// 0.0% win rate. That reads as "this candidate changes nothing and the game is
+// perfectly even", which is the most misleading output this tool could
+// produce, and the only clue was a `matches 0` line above it.
+//
+// So it refuses to report rather than print a table that means nothing.
+if (A.totals.matches === 0 || B.totals.matches === 0) {
+  console.error("ABORTED — no matches ran, so there is nothing to compare.");
+  console.error("  The evaluator could not play the slate at all. The usual cause");
+  console.error("  is a model set this build refuses: models/ holding networks");
+  console.error("  trained against an older observation or action version.");
+  console.error("  Export a compatible set and point the evaluator at it:");
+  console.error("    npx tsx simulation/src/tools/exportV4Models.ts <runDir> <outDir>");
+  console.error("    ELEMENTALS_AI_MODEL_DIR=<outDir> npx tsx <this tool> ...");
+  process.exit(1);
+}
+
 console.log("\n=== PARITY (smaller spread / sd = fairer) ===");
 console.log("  metric                          baseline      candidate      change");
 const cmp = (name: string, a: number, b: number, dp = 4) => {

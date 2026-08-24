@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { NeatRng, cloneGenome, mutate, type Genome, type NeatConfig } from "../neat/index.js";
+import { NeatRng, addConnection, cloneGenome, mutate, type Genome, type NeatConfig } from "../neat/index.js";
 import { InnovationRegistry } from "../neat/index.js";
 import { ACTION_SIZE, OBSERVATION_SIZE } from "../ai/index.js";
 import type { AiModel } from "../ai/index.js";
@@ -24,7 +24,7 @@ import type { AiModel } from "../ai/index.js";
  */
 
 /** Adds input nodes up to `OBSERVATION_SIZE`, wiring none of them. */
-export function growInputs(genome: Genome): Genome {
+export function growInputs(genome: Genome, registry: InnovationRegistry): Genome {
   const inputs = genome.nodes.filter((n) => n.type === "input");
   const missing = OBSERVATION_SIZE - inputs.length;
   if (missing < 0) {
@@ -40,10 +40,45 @@ export function growInputs(genome: Genome): Genome {
   // hidden or output node. `buildNetwork` sorts input ids, so the new ones land
   // at the end — matching the observation indices they represent.
   const nextId = Math.max(...grown.nodes.map((n) => n.id)) + 1;
+  const added: number[] = [];
   for (let i = 0; i < missing; i++) {
     // Inputs carry an activation like any node; it is never applied to them
     // (an input IS its value), but the shape must be well formed.
     grown.nodes.push({ id: nextId + i, type: "input", activation: "identity" });
+    added.push(nextId + i);
+  }
+
+  // ⚠️ WIRED AT ZERO, BECAUSE UNWIRED IS UNREACHABLE.
+  //
+  // Leaving the new inputs with no edges at all preserves behaviour perfectly
+  // — and makes them invisible to evolution. Measured over a 300-generation
+  // run: the three threat inputs had ZERO outgoing connections in both the
+  // starting genome and the final champion. NEAT adds a connection by picking
+  // endpoints at random, so on a warm-started genome carrying 637 of them the
+  // odds of landing on one specific new input, and of that random edge helping
+  // enough to survive selection, are negligible. The AI stood under Light Show
+  // and Old Friends and died because nothing connected "a strike is coming" to
+  // the buy-shield head — which was itself well wired, with 27 incoming edges.
+  //
+  // A weight of EXACTLY ZERO contributes exactly nothing, so the migrated
+  // genome still computes precisely what it computed before, which is the
+  // property that makes a warm start safe. What changes is that the gene now
+  // EXISTS, so ordinary weight mutation can move it off zero and selection can
+  // judge it. The search no longer has to invent the connection before it can
+  // begin tuning it.
+  if (added.length > 0) {
+    const outputs = grown.nodes.filter((n) => n.type === "output").map((n) => n.id);
+    for (const from of added) {
+      for (const to of outputs) {
+        addConnection(grown, {
+          innovation: registry.connection(from, to),
+          from,
+          to,
+          weight: 0,
+          enabled: true,
+        });
+      }
+    }
   }
   return grown;
 }
@@ -95,5 +130,21 @@ export function migrateSeeds(from: string | Genome, also: readonly Genome[] = []
       ? ((JSON.parse(readFileSync(from, "utf8")) as AiModel).genome as Genome)
       : from;
   const sources: Genome[] = [source, ...also];
-  return sources.map((g) => growOutputs(growInputs(g)));
+  // One registry across every seed, so the same new edge gets the same
+  // innovation number in all of them — otherwise crossover would treat
+  // identical connections as unrelated genes.
+  //
+  // Started PAST everything the sources already use, so a freshly minted
+  // innovation can never collide with a historical marking the trained genomes
+  // are still carrying.
+  const maxNode = Math.max(...sources.flatMap((g) => g.nodes.map((n) => n.id)));
+  const maxInnovation = Math.max(
+    0,
+    ...sources.flatMap((g) => g.connections.map((c) => c.innovation)),
+  );
+  const registry = new InnovationRegistry(maxNode + 1 + OBSERVATION_SIZE, maxInnovation + 1);
+  // ⚠️ OUTPUTS FIRST. `growInputs` wires each new input to every output that
+  // exists when it runs, so growing inputs first left the three new heads
+  // unreachable from the three new inputs — the exact pairing this is for.
+  return sources.map((g) => growInputs(growOutputs(g), registry));
 }

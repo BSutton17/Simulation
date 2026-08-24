@@ -1,4 +1,5 @@
 import type { GameplayEvent } from "../../../src/engine/events.js";
+import type { Match } from "../../../src/match/Match.js";
 import type { SimulationObserver } from "../types.js";
 
 /**
@@ -139,6 +140,25 @@ export interface SeatCombat {
   debtsCleared: number;
   /** Summed promptness of those clears, each in [0,1]. */
   debtPromptness: number;
+  /**
+   * The most gold this seat ever held at once.
+   *
+   * ⚠️ NOTHING IN THE SCORING EVER REWARDED HOLDING GOLD, and five terms
+   * reward spending it — activity counts casts, variety counts distinct
+   * abilities, combo counts sequences, ultimate pays for reaching one, resource
+   * pays for shields and repairs. So every gradient pointed at spending, and a
+   * treasury scored exactly zero. Measured across all sixteen kingdoms in a
+   * duel: median holdings 42-96 gold against dearest abilities costing 300 to
+   * 1345. Not one kingdom could ever afford its own most expensive ability.
+   *
+   * Saving is only INSTRUMENTALLY useful — hold now, afford something better
+   * later — which is delayed, indirect credit and the hardest kind for
+   * evolution to find on its own. This is the number that lets it be paid for.
+   *
+   * Sampled every TICK rather than on casts: reading the treasury at the moment
+   * a seat acts reads it exactly when it is lowest.
+   */
+  peakCurrency: number;
   /** Damage this seat dealt to a volcano. */
   volcanoDamage: number;
   /** Share of the volcano's health this seat removed, once it was broken. */
@@ -158,6 +178,7 @@ function empty(): SeatCombat {
     healingReceived: 0,
     shieldedVsLightShow: 0,
     siegesLifted: 0,
+    peakCurrency: 0,
     debtsCleared: 0,
     debtPromptness: 0,
     volcanoDamage: 0,
@@ -208,6 +229,24 @@ export class CombatObserver implements SimulationObserver {
       this.seats.set(id, entry);
     }
     return entry;
+  }
+
+  /**
+   * Samples every seat's treasury once a tick.
+   *
+   * On the tick rather than on a cast, because a seat's gold at the moment it
+   * acts is its gold at the moment it is lowest — reading there would measure
+   * the opposite of what "how much did it manage to save" means.
+   */
+  onTick(match: Match): void {
+    const state = match.gameState;
+    if (!state) return;
+    for (const player of state.getPlayers()) {
+      const seat = this.seat(player.id);
+      if (player.economy.currency > seat.peakCurrency) {
+        seat.peakCurrency = player.economy.currency;
+      }
+    }
   }
 
   onEvent(event: GameplayEvent): void {

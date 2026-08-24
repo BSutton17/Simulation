@@ -3,6 +3,26 @@ import type { MatchFormat } from "./slate.js";
 import type { SeatCombat } from "./matchObserver.js";
 import type { KingdomId } from "../../../src/data/kingdoms.js";
 import { PLAYSTYLES, comboProgress, spamPenalty } from "./playstyle.js";
+import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
+
+/**
+ * What this kingdom's most expensive castable ability costs.
+ *
+ * The liquidity term is scaled against this rather than a flat figure, because
+ * a flat one would be trivial for Light (dearest 340) and out of reach for
+ * Water (1345) — the same reward would then mean "save a little" for one
+ * kingdom and "save impossibly" for another. Cached: it is fixed data and the
+ * fitness runs on every seat of every match.
+ */
+const dearestByKingdom = new Map<string, number>();
+function dearestAbilityCost(kingdom: string): number {
+  const hit = dearestByKingdom.get(kingdom);
+  if (hit !== undefined) return hit;
+  const kit = abilitiesForKingdom(kingdom as never).filter((a) => a.kind !== "passive");
+  const dearest = kit.length > 0 ? Math.max(...kit.map((a) => a.cost)) : 1;
+  dearestByKingdom.set(kingdom, dearest);
+  return dearest;
+}
 
 /**
  * AI fitness — how good a PLAYER is.
@@ -17,7 +37,7 @@ import { PLAYSTYLES, comboProgress, spamPenalty } from "./playstyle.js";
  * becomes something nobody can reason about and a policy learns to farm.
  */
 
-export const AI_FITNESS_VERSION = "v9";
+export const AI_FITNESS_VERSION = "v10";
 
 /** Everything one evaluation match produced. Kept whole, not reduced to a number. */
 export interface ScenarioResult {
@@ -76,6 +96,7 @@ export interface FitnessTerms {
   activity: number;
   variety: number;
   resource: number;
+  liquidity: number;
   /** The kingdom's intended line, in full or in part. */
   combo: number;
   /** Casting the kingdom's ultimate at all. */
@@ -210,6 +231,24 @@ export interface FitnessConfig {
    * reason: it opens the door without dictating when to walk through it.
    */
   resourceWeight: number;
+  /**
+   * Reward for banking enough to actually use the expensive half of a kit.
+   *
+   * ⚠️ NOTHING PAID FOR SAVING AND FIVE TERMS PAID FOR SPENDING — activity
+   * counts casts, variety counts distinct abilities, combo counts sequences,
+   * ultimate pays for reaching one, resource pays for shields and repairs. So
+   * the gradient pointed at an empty treasury. Measured over all sixteen
+   * kingdoms in a duel: median holdings 42-96 gold, dearest abilities 300-1345,
+   * and NOT ONE kingdom could ever afford its own most expensive ability.
+   *
+   * Scaled against that dearest ability, so it asks each kingdom for what its
+   * OWN kit needs rather than a flat number trivial for Light and impossible
+   * for Water. Saturating at 1, so once a seat can afford its biggest play
+   * hoarding past that pays nothing — which is what stops this rewarding a
+   * turtle, along with it staying small: a genome that only banks scores zero
+   * on activity, variety, combo, combat and the win itself.
+   */
+  liquidityWeight: number;
   /** Shields + repairs per match at which the resource term is fully paid. */
   resourceTarget: number;
 }
@@ -241,9 +280,9 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // ability (Dark, Kitsune, Love) from collapsing onto one cast.
   //
   // was 0.20
-  placementWeight: 0.1,
+  placementWeight: 0.06,
   // was 0.10
-  survivalWeight: 0.06,
+  survivalWeight: 0.05,
   // was 0.10
   combatWeight: 0.06,
   timeoutCap: 0.25,
@@ -269,6 +308,7 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // failure mode. The cap keeps spam strictly worse than varied play without
   // making silence attractive.
   spamCap: 0.45,
+  liquidityWeight: 0.05,
   resourceWeight: 0.03,
   resourceTarget: 3,
 };
@@ -283,6 +323,7 @@ export function maxScore(config: FitnessConfig): number {
     config.activityWeight +
     config.varietyWeight +
     config.resourceWeight +
+    config.liquidityWeight +
     config.comboWeight +
     config.ultimateWeight +
     config.defenseWeight
@@ -399,6 +440,18 @@ export function scoreScenario(
         (context.behaviour.shields + context.behaviour.repairs) /
           Math.max(1, config.resourceTarget),
       ),
+    // Saving, scaled against what THIS kingdom's dearest ability costs.
+    liquidity:
+      config.liquidityWeight *
+      // `?? 0` deliberately: a context assembled without this tally (an older
+      // fixture, a caller that predates the term) must score as "saved
+      // nothing" rather than turning the whole scenario into NaN. A silent NaN
+      // here propagates into selection and is invisible until a run stalls —
+      // it has already cost this project eleven broken tests once.
+      Math.min(
+        1,
+        (context.combat.peakCurrency ?? 0) / Math.max(1, dearestAbilityCost(context.kingdom)),
+      ),
     // ── the kingdom's intended play ──────────────────────────────────────
     //
     // Partial credit by design: `comboProgress` returns how far along the line
@@ -470,6 +523,7 @@ export function scoreScenario(
     terms.activity +
     terms.variety +
     terms.resource +
+    terms.liquidity +
     terms.combo +
     terms.ultimate +
     terms.defense +

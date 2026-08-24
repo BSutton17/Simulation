@@ -58,7 +58,14 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * who wins and when — moves across the whole workload. Previous value:
  * 7e10e5b580ef28cf.
  *
- * Re-recorded 2026-08-23 for the DEFENSIVE ACTION HEADS. Bots can now answer
+ * Re-recorded 2026-08-24 for the SHIELD REFLEX and the Light Show values. A
+ * seat that now puts a shield up against a siege or a telegraphed strike plays
+ * a different match from one that stood and took it, and Light Show's cast
+ * price and cooldown both moved. Two deliberate changes to what happens on the
+ * field, which is the case this note anticipates. The self-consistency half —
+ * two runs of one workload agreeing — never broke.
+ *
+ * Previously re-recorded 2026-08-23 for the DEFENSIVE ACTION HEADS. Bots can now answer
  * Roulette, the Slot Machine and Creepy Crawlers, which previously stopped a
  * bot's gold production permanently because those interactions resolved only
  * through socket handlers no AI path called. A seat that keeps its income
@@ -86,7 +93,7 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * — but it must never change as a side effect of an optimisation. Re-record it
  * in the same commit as the intended change, and say why in the message.
  */
-const WORKLOAD_FINGERPRINT = "d95301ff588acfa3";
+const WORKLOAD_FINGERPRINT = "9cd9ea3f46c72f23";
 
 const SMALL = { duelPairings: 2, ffa4Compositions: 1, ffa7Compositions: 1 };
 

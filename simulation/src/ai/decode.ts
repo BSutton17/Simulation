@@ -1,7 +1,10 @@
 import {
   ACTION_SIZE,
+  BET_PICK,
   CHARGE_FRACTION,
   CHOICE_PICK,
+  DEFEND_GATE,
+  DISPEL_GATE,
   SECOND_TARGET,
   SPREAD_GATE,
   PRIMARY_ACTION_COUNT,
@@ -65,6 +68,19 @@ export interface Decision {
   readonly secondTargetPick: number | null;
   /** Dark's Yin and Yang: which declared option, as a fraction of the menu. */
   readonly choicePick: number | null;
+  /**
+   * Answer the pending defensive interaction instead of acting this decision.
+   *
+   * Read every decision rather than masked, like the other auxiliary heads —
+   * `controller.ts` ignores it when nothing is owed. It is deliberately NOT a
+   * free reflex: see the note in `actions.ts` on why resolving one of these
+   * spends the decision.
+   */
+  readonly defend: boolean;
+  /** Roulette: which colour to back, as a fraction over red/black/green. */
+  readonly betPick: number;
+  /** Pay off a dispellable status instead of acting this decision. */
+  readonly dispel: boolean;
 }
 
 const WAIT_ACTION: PrimaryAction = { kind: "wait" };
@@ -152,6 +168,9 @@ export function decide(
     // primary head chose, and `controller.ts` ignores them for abilities that
     // do not take that payload. Masking them per-ability would need the mask to
     // know which slot is about to be chosen, which it does not.
+    defend: squash(outputs[DEFEND_GATE]!) > 0.5,
+    betPick: squash(outputs[BET_PICK]!),
+    dispel: squash(outputs[DISPEL_GATE]!) > 0.5,
     spread: squash(outputs[SPREAD_GATE]!) > 0.5,
     secondTargetPick: squash(outputs[SECOND_TARGET]!),
     choicePick: squash(outputs[CHOICE_PICK]!),

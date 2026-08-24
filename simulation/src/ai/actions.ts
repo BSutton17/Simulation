@@ -49,7 +49,37 @@ export const SECOND_TARGET = 23;
 export const CHOICE_PICK = 24;
 
 /** Total network outputs. */
-export const ACTION_SIZE = 25;
+/**
+ * ⚠️ THE DEFENSIVE HEADS. WITHOUT THESE A BOT'S ECONOMY STOPS FOR GOOD.
+ *
+ * Roulette and the Slot Machine halt the victim's gold production until they
+ * place a bet or pull the lever; Creepy Crawlers eat gold until the bugs are
+ * swatted; Fireflies bar a shield until the ransom is paid. Every one of those
+ * resolves through `net/matchHandlers` — `match:bet`, `match:spin`,
+ * `match:squash`, `match:buy` — which only a socket reaches. No AI path called
+ * them, so a bot hit by Joker or Insects lost its economy for the rest of the
+ * match with no way back, and the balance figures for those two kingdoms were
+ * measured against opponents who could not defend at all.
+ *
+ * ⚠️ THEY CONSUME THE DECISION, and that is the design, not a limitation.
+ * What these abilities actually cost a human is ATTENTION — you are clicking a
+ * bug instead of playing — so resolving them for free would hand the AI an
+ * advantage no player has. Firing one of these gates spends the decision it was
+ * chosen in, which at a 5-tick decision period is a quarter second: about what
+ * a click costs.
+ *
+ * Placed AFTER the existing heads rather than among the primaries, so no
+ * existing index changes meaning and a trained genome can still be warm
+ * started — a new output contributes nothing until evolution wires it in.
+ */
+/** Resolve whatever defensive interaction is pending, instead of acting. */
+export const DEFEND_GATE = 25;
+/** Roulette only: which colour to back, as a fraction over red/black/green. */
+export const BET_PICK = 26;
+/** Pay off a dispellable status (Light's Fireflies), instead of acting. */
+export const DISPEL_GATE = 27;
+
+export const ACTION_SIZE = 28;
 
 /**
  * The primary heads — the ones an argmax chooses between. Targeting is a
@@ -96,6 +126,9 @@ export function actionName(index: number): string {
   if (index === SPREAD_GATE) return "spreadGate";
   if (index === SECOND_TARGET) return "secondTarget";
   if (index === CHOICE_PICK) return "choicePick";
+  if (index === DEFEND_GATE) return "defendGate";
+  if (index === BET_PICK) return "betPick";
+  if (index === DISPEL_GATE) return "dispelGate";
   const action = primaryActionOf(index);
   return "slot" in action ? `${action.kind}[${action.slot}]` : action.kind;
 }

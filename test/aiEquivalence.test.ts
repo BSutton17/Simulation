@@ -58,6 +58,14 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * who wins and when — moves across the whole workload. Previous value:
  * 7e10e5b580ef28cf.
  *
+ * Re-recorded 2026-08-23 for the DEFENSIVE ACTION HEADS. Bots can now answer
+ * Roulette, the Slot Machine and Creepy Crawlers, which previously stopped a
+ * bot's gold production permanently because those interactions resolved only
+ * through socket handlers no AI path called. A seat that keeps its income
+ * plays a different match, so every outcome in the workload moves — the
+ * deliberate-AI-improvement case this note anticipates. The self-consistency
+ * half of the test (two runs of the same workload agreeing) never broke.
+ *
  * Previously re-recorded 2026-08-20 for BALANCE V3 — the 180 searched parameters written
  * into the ability data files. Every match outcome moves when the balance does,
  * which is the legitimate case this note anticipates.
@@ -78,7 +86,7 @@ import { KINGDOM_IDS } from "../src/data/kingdoms.js";
  * — but it must never change as a side effect of an optimisation. Re-record it
  * in the same commit as the intended change, and say why in the message.
  */
-const WORKLOAD_FINGERPRINT = "e83dcd6ace1710d0";
+const WORKLOAD_FINGERPRINT = "d95301ff588acfa3";
 
 const SMALL = { duelPairings: 2, ffa4Compositions: 1, ffa7Compositions: 1 };
 

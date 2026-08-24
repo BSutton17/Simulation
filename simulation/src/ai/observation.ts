@@ -19,10 +19,13 @@ import { visibilitySpecHash } from "./visibility.js";
  * where a divisor does not.
  */
 
-export const OBSERVATION_SIZE = 80;
+export const OBSERVATION_SIZE = 84;
 
 /** Where the kingdom one-hot starts. */
 export const KINGDOM_BASE = 64;
+
+/** Where the defensive-obligation block starts. */
+export const DEFENCE_BASE = 80;
 
 /** Where each group starts, so the layout is stated once. */
 export const SELF_BASE = 0;
@@ -178,6 +181,24 @@ export function encode(knowledge: PlayerKnowledge, out: Float32Array): void {
   for (let i = 0; i < KINGDOM_IDS.length; i++) {
     out[KINGDOM_BASE + i] = i === kingdomIndex ? 1 : 0;
   }
+
+  // ── Group 7 · defensive obligations (80–83) ───────────────────
+  //
+  // ⚠️ INPUT 13 SAID SOMETHING WAS OWED BUT NEVER WHAT. `pendingObligation`
+  // collapsed a pending spin and a pending bet into one bit, which is not
+  // enough to act on: the two are answered by different heads, and neither
+  // covers crawlers or a firefly ransom. A policy that cannot tell them apart
+  // cannot learn which response the board is asking for.
+  //
+  // The costs are expressed as AFFORDABILITY rather than raw gold, matching
+  // inputs 6 and 7 — what decides whether a ransom is payable is the seat's
+  // balance against it, not its absolute size.
+  out[DEFENCE_BASE] = bit(self.spinOwed);
+  out[DEFENCE_BASE + 1] = bit(self.betOwed);
+  // Three bugs is a full swarm; each takes two swats.
+  out[DEFENCE_BASE + 2] = clamp01(self.crawlers / 3);
+  out[DEFENCE_BASE + 3] =
+    self.dispel && self.dispel.cost > 0 ? clamp01(self.currency / self.dispel.cost) : 0;
 }
 
 /** Standard shield purchase size, used to normalize shield pools. */

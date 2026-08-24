@@ -6,6 +6,10 @@ import {
   unlockOrUpgradeAbility,
 } from "../../../src/engine/purchases.js";
 import { selectTarget } from "../../../src/engine/targeting.js";
+import { dispelStatus } from "../../../src/engine/purchases.js";
+import { placeRouletteBet } from "../../../src/engine/roulette.js";
+import { spinSlotMachine } from "../../../src/engine/slotMachine.js";
+import { crawlerSwarm, squashCrawler } from "../../../src/engine/crawlers.js";
 import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
 import type { PlayerState } from "../../../src/match/playerState.js";
 import type { AIContext, AIController, AIFactory } from "../types.js";
@@ -58,6 +62,10 @@ export interface ControllerStats {
   repairs: number;
   shields: number;
   retargets: number;
+  /** Defensive interactions answered: spins, bets, swats. */
+  defends: number;
+  /** Ransoms paid to clear a dispellable status. */
+  dispels: number;
   waits: number;
   /**
    * Engine calls the mask said were legal but the engine refused.
@@ -168,7 +176,7 @@ export class NetworkController implements AIController {
 
   readonly stats: ControllerStats = {
     decisions: 0, casts: 0, invests: 0, citizens: 0, repairs: 0,
-    shields: 0, retargets: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
+    shields: 0, retargets: 0, defends: 0, dispels: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
     actionSwitches: 0, distinctActions: 0, legalOffered: 0,
     castLegal: new Array<number>(KIT_SLOTS).fill(0),
     castChosen: new Array<number>(KIT_SLOTS).fill(0),
@@ -345,6 +353,56 @@ export class NetworkController implements AIController {
       }
     }
     if (match.phase !== "active") return;
+
+    // ── defence, BEFORE the primary action and INSTEAD of it ───────────
+    //
+    // ⚠️ SPENDING THE DECISION IS THE POINT. Roulette, the Slot Machine and
+    // Creepy Crawlers cost a human their ATTENTION — clicking a bug is time not
+    // spent playing — and resolving them for free would give the AI an edge no
+    // player has. So these return early: the seat answers the board this
+    // decision and casts on the next one.
+    //
+    // Ordered ransom-first because a firefly swarm also bars a shield, so it
+    // gates a defensive option the other two do not.
+    if (decision.dispel && knowledge.self.dispel !== null) {
+      const result = dispelStatus(match, player);
+      if (result.ok) {
+        this.stats.dispels += 1;
+        return;
+      }
+      this.reject("dispel", result.error);
+    }
+    if (decision.defend) {
+      if (knowledge.self.betOwed) {
+        // No safe bet exists, so the colour is a real choice rather than a
+        // formality: green is a 1-in-37 jackpot against a 1.5x beating.
+        const colors = ["red", "black", "green"] as const;
+        const index = Math.min(colors.length - 1, Math.floor(decision.betPick * colors.length));
+        if (placeRouletteBet(match, player, colors[Math.max(0, index)]!) !== null) {
+          this.stats.defends += 1;
+          return;
+        }
+      }
+      if (knowledge.self.spinOwed) {
+        if (spinSlotMachine(match, player) !== null) {
+          this.stats.defends += 1;
+          return;
+        }
+      }
+      if (knowledge.self.crawlers > 0) {
+        // Always swat the first bug still alive. Each drains independently and
+        // killing one takes two hits, so CONCENTRATING hits strictly beats
+        // spreading them — the bleed only eases when a bug actually dies. That
+        // makes the index a solved question, not one worth a head.
+        const swarm = crawlerSwarm(player);
+        const needed = swarm?.hitsToKill ?? 1;
+        const index = swarm?.bugHits?.findIndex((h) => h < needed) ?? -1;
+        if (index >= 0 && squashCrawler(match, player, index) !== null) {
+          this.stats.defends += 1;
+          return;
+        }
+      }
+    }
 
     const action = decision.primary;
     switch (action.kind) {

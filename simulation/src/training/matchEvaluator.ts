@@ -83,7 +83,7 @@ export function ultimateCastsOf(kingdomId: KingdomId, sequence: readonly string[
 
 const emptyStats = (): ControllerStats => ({
   decisions: 0, casts: 0, invests: 0, citizens: 0, repairs: 0, shields: 0,
-  retargets: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
+  retargets: 0, defends: 0, dispels: 0, waits: 0, rejected: 0, rejectedBy: {}, forcedWaits: 0,
   actionSwitches: 0, distinctActions: 0, legalOffered: 0,
   castLegal: [0, 0, 0, 0, 0], castChosen: [0, 0, 0, 0, 0],
   castBlockedNotUnlocked: [0, 0, 0, 0, 0],

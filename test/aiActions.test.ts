@@ -170,7 +170,7 @@ test("charges are never spent beyond what is available or affordable", () => {
   assert.equal(chargesToSpend(null, 3, 100, 100_000), undefined);
 });
 
-test("the action layout is exactly 25 heads and maps cleanly", () => {
+test("the action layout is exactly 28 heads and maps cleanly", () => {
   // 22 -> 25: three AUXILIARY heads were added so the space could describe
   // payloads it previously could not — Air's multi-target spread, Love's BFFS
   // partner and Dark's declared choice. Those abilities were unreachable at any
@@ -178,7 +178,14 @@ test("the action layout is exactly 25 heads and maps cleanly", () => {
   //
   // `PRIMARY_ACTION_COUNT` is deliberately unchanged: these qualify a cast the
   // primary head already picked, exactly like `chargeFraction`.
-  assert.equal(ACTION_SIZE, 25);
+  //
+  // 25 -> 28: three DEFENSIVE heads. Roulette and the Slot Machine stop the
+  // victim's gold production until they bet or pull the lever, and crawlers eat
+  // gold until swatted — all of which resolved only through socket handlers, so
+  // no bot could ever answer one and every bot hit by Joker lost its economy
+  // permanently. These consume the decision they fire in, because what those
+  // abilities cost a human is attention.
+  assert.equal(ACTION_SIZE, 28);
   assert.equal(primaryActionOf(0).kind, "cast");
   assert.equal(primaryActionOf(4).kind, "cast");
   assert.equal(primaryActionOf(5).kind, "invest");

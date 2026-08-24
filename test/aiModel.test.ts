@@ -128,16 +128,23 @@ test("the observation and action specifications are pinned", () => {
   // ⚠️ BOTH BUMPS INVALIDATE TRAINED MODELS, and that is the point of pinning
   // them: a 22-output network cannot drive a 25-head space, and loading one
   // must fail loudly rather than silently misalign.
-  assert.equal(OBSERVATION_VERSION, "v2");
-  assert.equal(ACTION_VERSION, "v2");
+  //
+  // v2 -> v3 adds four inputs (80 -> 84) and three heads (25 -> 28) for the
+  // defensive obligations. Input 13 already said something was owed but never
+  // WHICH, which is not enough to act on: a spin and a bet are answered by
+  // different heads, and neither covers crawlers or a firefly ransom.
+  assert.equal(OBSERVATION_VERSION, "v3");
+  assert.equal(ACTION_VERSION, "v3");
   assert.equal(
     visibilitySpecHash(),
+    // UNCHANGED across v3, and that is the claim worth making: the new inputs
+    // are all own-side obligations. A bot learns nothing new about anyone else.
     "920dc078",
     "the visibility rule changed — a seat may now see something different",
   );
   assert.equal(
     observationSpecHash(),
-    "36645ab0",
+    "1e083bc7",
     "the observation contract changed — trained models are no longer valid",
   );
 });

@@ -17,10 +17,12 @@ import { computeStat } from "../../../src/engine/modifiers.js";
 import {
   abilityUnlockCost,
   citizenCost,
+  dispellableStatus,
   repairCost,
   shieldCost,
 } from "../../../src/engine/purchases.js";
 import { abilityUpgradeCost } from "../../../src/engine/abilities.js";
+import { livingCrawlers } from "../../../src/engine/crawlers.js";
 import { abilitiesForKingdom } from "../../../src/data/kingdomAbilities.js";
 import { KINGDOM_IDS, KINGDOM_PASSIVES, type KingdomId } from "../../../src/data/kingdoms.js";
 import { CASTLE, DARK, SHIELD, TARGETING, TICK } from "../../../src/data/balance.js";
@@ -157,6 +159,22 @@ export interface SelfKnowledge {
   readonly economicLock: boolean;
   readonly targetingLock: boolean;
   readonly pendingObligation: boolean;
+  /**
+   * The defensive interactions a seat has to actually PERFORM, not just endure.
+   *
+   * ⚠️ WITHOUT THESE A BOT'S ECONOMY STOPS AND NEVER COMES BACK. Roulette and
+   * the Slot Machine halt gold production until the victim bets or pulls the
+   * lever, and Creepy Crawlers eat gold until the bugs are swatted. All three
+   * resolve through `net/matchHandlers` — a socket path — so no bot ever
+   * answered one. `pendingObligation` above already said something was owed;
+   * what was missing was WHICH, and any way to act on it.
+   */
+  readonly spinOwed: boolean;
+  readonly betOwed: boolean;
+  /** Crawlers still alive on this castle (each takes two swats to kill). */
+  readonly crawlers: number;
+  /** The ransom a dispellable status is charging (Light's Fireflies). */
+  readonly dispel: { statusId: string; cost: number } | null;
   readonly targetId: string | null;
   readonly switchReady: boolean;
   readonly kit: readonly KitSlotKnowledge[];
@@ -507,7 +525,10 @@ export function knowledgeFor(
   // Whether this kingdom's attacks may strike several kingdoms at once, and
   // the same condition the engine applies. Computed once per call rather than
   // per slot.
-  const multiTargets = KINGDOM_PASSIVES[player.kingdomId as KingdomId].some(
+  // `?? []` matching how enemy passives are read a few hundred lines below: a
+  // kingdom id with no passive table is not a crash, and tests seat dummy
+  // kingdoms that have none.
+  const multiTargets = (KINGDOM_PASSIVES[player.kingdomId as KingdomId] ?? []).some(
     (p) => p.type === "multiTargetAttacks",
   );
 
@@ -678,6 +699,10 @@ export function knowledgeFor(
       economicLock: purchasesBlocked || player.statuses.some((s) => s.blocksBearerShield),
       targetingLock: player.statuses.some((s) => s.blocksTargetChange),
       pendingObligation: player.pendingSpin !== null || player.pendingBet !== null,
+      spinOwed: player.pendingSpin !== null,
+      betOwed: player.pendingBet !== null,
+      crawlers: livingCrawlers(player),
+      dispel: dispellableStatus(player),
       targetId: player.target,
       switchReady: tick >= player.targetSwitchReadyTick,
       kit: kitKnowledge,

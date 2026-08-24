@@ -25,14 +25,14 @@ export const MODEL_FORMAT_VERSION = 1;
  * Bump when any of those change. A test pins this against the observation
  * specification hash so the two cannot drift apart silently.
  */
-export const OBSERVATION_VERSION = "v2";
+export const OBSERVATION_VERSION = "v3";
 
 /**
  * The action contract: the 22 outputs, their order, and the target ordering
  * rule. The ordering is part of this version because outputs 14–19 are
  * meaningless without it.
  */
-export const ACTION_VERSION = "v2";
+export const ACTION_VERSION = "v3";
 
 /**
  * The genome/network serialization shape. Declared now, unused until Phase 2 —

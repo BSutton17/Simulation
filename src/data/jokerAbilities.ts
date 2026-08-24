@@ -150,7 +150,7 @@ export const BLACKJACK: AbilityDefinition = {
   kind: "attack",
   cost: 385,
   unlockCost: 193,
-  cooldownTicks: Math.round(6.6 * TICK.RATE), // 11 s
+  cooldownTicks: Math.round(6.6 * TICK.RATE), // 132 ticks (6.6 s)
   targeting: { mode: "singleEnemy" },
   effects: [
     {

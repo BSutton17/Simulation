@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { NeatRng, cloneGenome, mutate, type Genome, type NeatConfig } from "../neat/index.js";
 import { InnovationRegistry } from "../neat/index.js";
-import { OBSERVATION_SIZE } from "../ai/index.js";
+import { ACTION_SIZE, OBSERVATION_SIZE } from "../ai/index.js";
 import type { AiModel } from "../ai/index.js";
 
 /**
@@ -55,11 +55,45 @@ export function growInputs(genome: Genome): Genome {
  * places produced twelve seeds that `Population` then treated as twelve
  * pre-made genomes and mutated none of them.
  */
+/**
+ * Adds output nodes up to `ACTION_SIZE`, wiring none of them.
+ *
+ * ⚠️ THE ACTION SPACE GROWS TOO, and only inputs were being migrated. A
+ * genome trained against 25 heads dropped into a 28-head space keeps its 25 and
+ * simply has no node for the rest, so the new heads read whatever was left in
+ * the output buffer. They would never fire, never vary, and never be selected
+ * for — the warm start would silently guarantee the new behaviour could not be
+ * learned, which is the opposite of what warm starting is for.
+ *
+ * Unconnected outputs are safe for the same reason unconnected inputs are: an
+ * output with no incoming edge is a constant, so every head the genome already
+ * had computes exactly what it computed before. Evolution wires the new ones in
+ * when they start earning their place.
+ */
+export function growOutputs(genome: Genome): Genome {
+  const outputs = genome.nodes.filter((n) => n.type === "output");
+  const missing = ACTION_SIZE - outputs.length;
+  if (missing < 0) {
+    throw new Error(
+      `genome ${genome.id} has ${outputs.length} outputs but the action space is ` +
+        `${ACTION_SIZE} — it was trained on a WIDER action space and cannot be narrowed`,
+    );
+  }
+  if (missing === 0) return cloneGenome(genome);
+
+  const grown = cloneGenome(genome);
+  const nextId = Math.max(...grown.nodes.map((n) => n.id)) + 1;
+  for (let i = 0; i < missing; i++) {
+    grown.nodes.push({ id: nextId + i, type: "output", activation: "identity" });
+  }
+  return grown;
+}
+
 export function migrateSeeds(from: string | Genome, also: readonly Genome[] = []): Genome[] {
   const source =
     typeof from === "string"
       ? ((JSON.parse(readFileSync(from, "utf8")) as AiModel).genome as Genome)
       : from;
   const sources: Genome[] = [source, ...also];
-  return sources.map((g) => growInputs(g));
+  return sources.map((g) => growOutputs(growInputs(g)));
 }

@@ -37,7 +37,7 @@ function dearestAbilityCost(kingdom: string): number {
  * becomes something nobody can reason about and a policy learns to farm.
  */
 
-export const AI_FITNESS_VERSION = "v10";
+export const AI_FITNESS_VERSION = "v11";
 
 /** Everything one evaluation match produced. Kept whole, not reduced to a number. */
 export interface ScenarioResult {
@@ -298,7 +298,7 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // variety from 0.12 to 0.30 only because placement and combat paid for it —
   // raising variety alone would have totalled 1.04 and inverted the rule.
   varietyWeight: 0.1,
-  comboWeight: 0.25,
+  comboWeight: 0.18,
   ultimateWeight: 0.19,
   defenseWeight: 0.11,
   // Applied per repeat-run via `repeatPenaltyFor`, then capped.
@@ -308,7 +308,7 @@ export const DEFAULT_FITNESS: FitnessConfig = {
   // failure mode. The cap keeps spam strictly worse than varied play without
   // making silence attractive.
   spamCap: 0.45,
-  liquidityWeight: 0.05,
+  liquidityWeight: 0.12,
   resourceWeight: 0.03,
   resourceTarget: 3,
 };

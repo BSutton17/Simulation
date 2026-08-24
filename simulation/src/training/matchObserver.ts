@@ -30,6 +30,16 @@ import type { SimulationObserver } from "../types.js";
  */
 const SPAM_EXEMPT_STATUSES = new Set(["thunderingFate"]);
 
+/**
+ * Statuses whose ONLY exit is buying a shield.
+ *
+ * Listed by id rather than read from the definition because the observer never
+ * imports ability data — but the definition is the authority, and a test pins
+ * this set against every status carrying `endsOnShieldPurchase` so a new one
+ * cannot be added without this list noticing.
+ */
+const SHIELD_ENDED_STATUSES = new Set(["oldFriends"]);
+
 export interface SeatCombat {
   /**
    * Successful ability activations by this seat.
@@ -90,6 +100,17 @@ export interface SeatCombat {
    * The caster is excluded: shielding against your own ultimate is not defence.
    */
   shieldedVsLightShow: number;
+  /**
+   * Sieges this seat lifted by buying a shield (Kitsune's Old Friends).
+   *
+   * ⚠️ THE ONLY EXIT THE GAME OFFERS. `endsOnShieldPurchase` with
+   * `durationTicks: 0` means no clock and no ransom — the status ticks damage
+   * until a shield is bought, so waiting is not counterplay, it is just losing
+   * slowly. Scored separately from the Light Show read because it is a
+   * different skill: one is reacting inside a 3.25 s window, this one is
+   * recognising that the usual option of riding a debuff out does not exist.
+   */
+  siegesLifted: number;
   /** Damage this seat dealt to a volcano. */
   volcanoDamage: number;
   /** Share of the volcano's health this seat removed, once it was broken. */
@@ -108,6 +129,7 @@ function empty(): SeatCombat {
     kills: 0,
     healingReceived: 0,
     shieldedVsLightShow: 0,
+    siegesLifted: 0,
     volcanoDamage: 0,
     volcanoShare: 0,
   };
@@ -142,6 +164,8 @@ export class CombatObserver implements SimulationObserver {
   private readonly exempt = new Set<string>();
   /** Seats with a shield standing right now, from the event stream. */
   private readonly shielded = new Set<string>();
+  /** Seats currently under a siege only a shield can lift. */
+  private readonly besieged = new Set<string>();
   /** Volcano damage by attacker, resolved into shares when it breaks. */
   private readonly volcanoHits = new Map<string, number>();
 
@@ -173,6 +197,12 @@ export class CombatObserver implements SimulationObserver {
       }
       case "shieldGained": {
         this.shielded.add(event.playerId);
+        // A shield bought while under a shield-ending siege IS the counterplay,
+        // so it is credited at the moment it lands rather than inferred later.
+        if (this.besieged.has(event.playerId)) {
+          this.seat(event.playerId).siegesLifted += 1;
+          this.besieged.delete(event.playerId);
+        }
         break;
       }
       case "shieldDestroyed": {
@@ -206,10 +236,12 @@ export class CombatObserver implements SimulationObserver {
       }
       case "statusApplied": {
         if (SPAM_EXEMPT_STATUSES.has(event.statusId)) this.exempt.add(event.targetId);
+        if (SHIELD_ENDED_STATUSES.has(event.statusId)) this.besieged.add(event.targetId);
         break;
       }
       case "statusExpired": {
         if (SPAM_EXEMPT_STATUSES.has(event.statusId)) this.exempt.delete(event.playerId);
+        if (SHIELD_ENDED_STATUSES.has(event.statusId)) this.besieged.delete(event.playerId);
         break;
       }
       case "damage": {

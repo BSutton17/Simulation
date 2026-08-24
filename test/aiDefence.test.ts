@@ -4,7 +4,7 @@ import { Match } from "../src/match/Match.js";
 import { createMatchConfig } from "../src/match/matchConfig.js";
 import { earn } from "../src/engine/money.js";
 import { knowledgeFor, ObservedHistory } from "../simulation/src/ai/knowledge.js";
-import { OBSERVATION_SIZE, DEFENCE_BASE, encode } from "../simulation/src/ai/observation.js";
+import { OBSERVATION_SIZE, DEFENCE_BASE, THREAT_BASE, encode } from "../simulation/src/ai/observation.js";
 import { livingCrawlers } from "../src/engine/crawlers.js";
 import { dispellableStatus } from "../src/engine/purchases.js";
 import type { MatchPlayer } from "../src/match/types.js";
@@ -78,7 +78,11 @@ test("the defence block sits inside the observation and every input is finite", 
   const { match, players } = arena(["light", "plains", "plains"]);
   const obs = new Float32Array(OBSERVATION_SIZE);
   encode(knowledgeFor(match, players[0]!, new ObservedHistory()), obs);
-  assert.equal(DEFENCE_BASE + 4, OBSERVATION_SIZE, "the block must be the last four inputs");
+  // The defence block is four inputs wide and butts against the threat block,
+  // which was appended after it. Asserting against OBSERVATION_SIZE would pin
+  // "nothing may ever be added after this", which is not the claim.
+  assert.equal(DEFENCE_BASE + 4, THREAT_BASE, "the defence block must be four inputs wide");
+  assert.ok(THREAT_BASE < OBSERVATION_SIZE, "the threat block must fit");
   assert.ok(obs.every((x) => Number.isFinite(x)), "observation contained NaN");
 });
 

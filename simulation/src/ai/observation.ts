@@ -1,6 +1,7 @@
 import type { PlayerKnowledge } from "./knowledge.js";
 import { KIT_SLOTS } from "./actions.js";
 import { KINGDOM_IDS } from "../../../src/data/kingdoms.js";
+import { TICK } from "../../../src/data/balance.js";
 import { OBSERVATION_VERSION } from "./versions.js";
 import { visibilitySpecHash } from "./visibility.js";
 
@@ -19,13 +20,16 @@ import { visibilitySpecHash } from "./visibility.js";
  * where a divisor does not.
  */
 
-export const OBSERVATION_SIZE = 84;
+export const OBSERVATION_SIZE = 87;
 
 /** Where the kingdom one-hot starts. */
 export const KINGDOM_BASE = 64;
 
 /** Where the defensive-obligation block starts. */
 export const DEFENCE_BASE = 80;
+
+/** Where the incoming-threat block starts. */
+export const THREAT_BASE = 84;
 
 /** Where each group starts, so the layout is stated once. */
 export const SELF_BASE = 0;
@@ -199,10 +203,45 @@ export function encode(knowledge: PlayerKnowledge, out: Float32Array): void {
   out[DEFENCE_BASE + 2] = clamp01(self.crawlers / 3);
   out[DEFENCE_BASE + 3] =
     self.dispel && self.dispel.cost > 0 ? clamp01(self.currency / self.dispel.cost) : 0;
+
+  // ── Group 8 · incoming threat (84–86) ───────────────────────
+  //
+  // ⚠️ THE FITNESS PAID FOR A REACTION THE POLICY COULD NOT SEE. Being shielded
+  // when Light Show lands is scored (`shieldedVsLightShow`), but nothing in the
+  // observation said a strike was on the clock, so the only way to earn it was
+  // to happen to be shielded already. A reward for a reaction is worthless
+  // without the perception the reaction depends on.
+  //
+  // URGENCY RATHER THAN A RAW COUNTDOWN, and rising as the strike approaches:
+  // what decides whether to buy a shield is how little time is left, and a
+  // value that grows toward the deadline is the shape that maps onto "act now".
+  // Light Show's window is 3.25 s, so the scale is set by that.
+  const strike = self.incomingStrike;
+  out[THREAT_BASE] = strike ? clamp01(1 - strike.ticksUntil / THREAT_HORIZON) : 0;
+  // How much it would hurt, against what this seat has left standing.
+  out[THREAT_BASE + 1] = strike
+    ? clamp01(strike.amount / Math.max(1, self.hp + self.shield))
+    : 0;
+  // Old Friends: no clock and no ransom, so a shield is the whole counterplay.
+  out[THREAT_BASE + 2] = bit(self.siegeEndsOnShield);
 }
 
 /** Standard shield purchase size, used to normalize shield pools. */
 const STANDARD_SHIELD_HP = 1750;
+/**
+ * The horizon a telegraphed strike's urgency is scaled against.
+ *
+ * TWICE Light Show's 3.25 s fuse, deliberately. Scaling against the fuse itself
+ * put urgency at exactly ZERO the moment the ability was cast — `1 - 65/65` —
+ * which is the same reading as no strike at all, so the input went live only
+ * after the window had already started closing. Against a double horizon a
+ * fresh Light Show reads 0.5 and climbs to 1.0 as it lands: present
+ * immediately, and more insistent the less time is left.
+ *
+ * A longer-fused strike simply reads lower until it gets close, which is the
+ * correct behaviour rather than a special case.
+ */
+const THREAT_HORIZON = 2 * 3.25 * TICK.RATE;
 /** The simulation's default per-match tick cap, for match progress. */
 const MAX_TICKS = 24_000;
 /** How long a hit stays "recent" for input 33 (30 s at 20 t/s). */

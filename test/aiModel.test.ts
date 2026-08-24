@@ -144,7 +144,7 @@ test("the observation and action specifications are pinned", () => {
   );
   assert.equal(
     observationSpecHash(),
-    "1e083bc7",
+    "4ad6664a",
     "the observation contract changed — trained models are no longer valid",
   );
 });

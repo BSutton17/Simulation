@@ -425,12 +425,18 @@ export function scoreScenario(
     ultimate: context.behaviour.ultimateCasts > 0 ? config.ultimateWeight : 0,
     // Reacting to what the board announced. Saturating, so one good read pays
     // most of the term and a genome cannot farm it by hoarding shields.
+    // Three reads, each saturating on its own before they are combined, so the
+    // term rewards RECOGNISING a situation rather than repeating one. A genome
+    // that only ever learns the Light Show read still earns its share.
     defense:
       config.defenseWeight *
       Math.min(
         1,
-        Math.min(1, context.combat.shieldedVsLightShow) * 0.5 +
-          Math.min(1, context.combat.volcanoShare) * 0.5,
+        Math.min(1, context.combat.shieldedVsLightShow) * 0.4 +
+          Math.min(1, context.combat.volcanoShare) * 0.4 +
+          // Old Friends has no clock and no ransom: a shield is the only exit
+          // the game offers, so lifting a siege is a read, not a purchase.
+          Math.min(1, context.combat.siegesLifted) * 0.2,
       ),
     // Negative. Subtracted below rather than added.
     spam: -Math.min(

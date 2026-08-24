@@ -175,6 +175,29 @@ export interface SelfKnowledge {
   readonly crawlers: number;
   /** The ransom a dispellable status is charging (Light's Fireflies). */
   readonly dispel: { statusId: string; cost: number } | null;
+  /**
+   * A telegraphed strike already on the clock, and how long is left.
+   *
+   * ⚠️ LIGHT SHOW IS ANNOUNCED ON PURPOSE — "the warning is half the ability",
+   * as `delayedStrike` puts it. It schedules 2000 damage 3.25 s out and emits
+   * `strikeIncoming` so every kingdom can react, and the reaction it wants is a
+   * shield. The AI could not take it: nothing in the observation said a strike
+   * was coming, so the fitness paid for being shielded when Light Show landed
+   * while the policy had no way to know it was about to.
+   *
+   * Reading it is not a visibility breach. The engine broadcasts the warning to
+   * everyone; a bot that cannot see it knows LESS than a player, not more.
+   */
+  readonly incomingStrike: { ticksUntil: number; amount: number; breaksShields: boolean } | null;
+  /**
+   * Under a siege that ONLY a shield lifts (Kitsune's Old Friends).
+   *
+   * `durationTicks: 0` with `endsOnShieldPurchase` — there is no clock and no
+   * ransom, so waiting it out is not an option the game offers. Buying a shield
+   * is the entire counterplay, and the AI needs to be able to see that it is
+   * the one being asked for.
+   */
+  readonly siegeEndsOnShield: boolean;
   readonly targetId: string | null;
   readonly switchReady: boolean;
   readonly kit: readonly KitSlotKnowledge[];
@@ -703,6 +726,22 @@ export function knowledgeFor(
       betOwed: player.pendingBet !== null,
       crawlers: livingCrawlers(player),
       dispel: dispellableStatus(player),
+      incomingStrike: (() => {
+        // The soonest strike this seat has not itself cast. Field-wide, so the
+        // caster is excluded — shielding against your own ultimate is not
+        // defence, and the fitness scores it the same way.
+        let soonest: { ticksUntil: number; amount: number; breaksShields: boolean } | null = null;
+        for (const s of match.gameState!.pendingStrikes) {
+          if (s.ownerId === player.id) continue;
+          const ticksUntil = s.resolveTick - tick;
+          if (ticksUntil < 0) continue;
+          if (!soonest || ticksUntil < soonest.ticksUntil) {
+            soonest = { ticksUntil, amount: s.amount, breaksShields: s.breaksShields };
+          }
+        }
+        return soonest;
+      })(),
+      siegeEndsOnShield: player.statuses.some((s) => s.endsOnShieldPurchase === true),
       targetId: player.target,
       switchReady: tick >= player.targetSwitchReadyTick,
       kit: kitKnowledge,

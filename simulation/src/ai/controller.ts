@@ -7,6 +7,7 @@ import {
 } from "../../../src/engine/purchases.js";
 import { selectTarget } from "../../../src/engine/targeting.js";
 import { dispelStatus } from "../../../src/engine/purchases.js";
+import { TICK } from "../../../src/data/balance.js";
 import { placeRouletteBet } from "../../../src/engine/roulette.js";
 import { spinSlotMachine } from "../../../src/engine/slotMachine.js";
 import { crawlerSwarm, squashCrawler } from "../../../src/engine/crawlers.js";
@@ -154,6 +155,23 @@ export interface ControllerStats {
   investAffordable: number[];
   investChosen: number[];
 }
+
+/**
+ * How close a telegraphed strike must be before the reflex spends 300 gold.
+ *
+ * Light Show's fuse is 3.25 s; a shield bought at the very start of a longer
+ * fuse can be broken by ordinary attacks before the strike ever lands, so the
+ * reflex waits until the blow is genuinely imminent.
+ */
+const SHIELD_REFLEX_WINDOW = 3.25 * TICK.RATE;
+
+/**
+ * How hard it must hit, as a share of current HP, to be worth blocking.
+ *
+ * Light Show is 2000 against a 10,000 castle, so a tenth clears this
+ * comfortably while ordinary chip damage does not trigger it.
+ */
+const SHIELD_REFLEX_FRACTION = 0.1;
 
 export class NetworkController implements AIController {
   private readonly network: Network;
@@ -353,6 +371,44 @@ export class NetworkController implements AIController {
       }
     }
     if (match.phase !== "active") return;
+
+    // ── the shield reflex ─────────────────────────────────────
+    //
+    // ⚠️ A RULE, DELIBERATELY, BECAUSE THIS ONE IS NOT WORTH DISCOVERING.
+    //
+    // Two situations have exactly one correct answer and no trade-off worth
+    // weighing. Old Friends carries `endsOnShieldPurchase` with no duration:
+    // there is no clock and no ransom, so waiting is not counterplay, it is
+    // losing slowly at 3 damage a tick. Light Show announces 2000 damage 3.25 s
+    // ahead precisely so the field can put a shield up.
+    //
+    // Measured across three full training runs, the AI never learned either.
+    // Exposure was not the problem for the siege — 0.74 land on a seat per
+    // self-play match — it simply never connected them, and stood there taking
+    // the full 1800. Light Show it has never once seen, because no genome in
+    // self-play ever affords a 340-gold ultimate to cast it.
+    //
+    // `shieldAvailable` already carries every precondition the engine checks:
+    // no shield up, no swarm barring one, off the break cooldown, and the gold
+    // in hand. So this only decides WHEN, and spends the decision like any
+    // other defensive act.
+    if (knowledge.self.shieldAvailable) {
+      const strike = knowledge.self.incomingStrike;
+      // Only a blow big enough to be worth 300 gold, and only once it is close
+      // enough that the shield will still be standing when it lands.
+      const worthBlocking =
+        strike !== null &&
+        strike.ticksUntil <= SHIELD_REFLEX_WINDOW &&
+        strike.amount >= knowledge.self.hp * SHIELD_REFLEX_FRACTION;
+      if (knowledge.self.siegeEndsOnShield || worthBlocking) {
+        const bought = buyShield(match, player);
+        if (bought.ok) {
+          this.stats.shields += 1;
+          return;
+        }
+        this.reject("shield", bought.error);
+      }
+    }
 
     // ── defence, BEFORE the primary action and INSTEAD of it ───────────
     //

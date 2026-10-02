@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 
 /**
@@ -46,9 +46,32 @@ function walk(dir, out, matches) {
   for (const entry of entries) {
     if (entry.name.startsWith(".") || SKIP.has(entry.name)) continue;
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, out, matches);
+    if (isDirectory(entry, full)) walk(full, out, matches);
     else if (matches(toPosix(full))) out.push(toPosix(full));
   }
+}
+
+/**
+ * Whether to descend into this entry.
+ *
+ * ⚠️ NOT `entry.isDirectory()` ALONE, BECAUSE THIS TREE LIVES UNDER OneDrive. Files On-Demand
+ * dehydrates anything untouched for a while, and a dehydrated entry keeps a reparse tag on its
+ * directory entry — so `readdirSync(..., { withFileTypes: true })` reports it as a SYMLINK, even once
+ * the content is back, and even though `statSync` on the same path says "directory". Anything keyed on
+ * the dirent type then silently skips the subtree.
+ *
+ * That exact bug cost real time in the sibling E-Football-Two/Server repo, where Jest's crawler skips
+ * non-files for the same reason: `npm test` reported "70 suites, 1280 tests, all passed" for an unknown
+ * length of time while the repo held 104 files and 1682 tests, hiding six genuine failures. Discovery
+ * here is currently correct by accident — the file branch never asks `isFile()` — but the directory
+ * branch does ask, and `test/support/` would vanish without a word if it were ever dehydrated.
+ *
+ * `statSync` follows the reparse point and answers correctly. It costs one syscall per entry.
+ */
+function isDirectory(entry, full) {
+  if (entry.isDirectory()) return true;
+  if (entry.isFile()) return false;          // the common case, settled without a syscall
+  try { return statSync(full).isDirectory(); } catch { return false; }
 }
 
 /** Convenience: files under `dir` whose name ends with any of `extensions`. */
